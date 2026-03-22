@@ -210,11 +210,11 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
     })
 
     const message = response.choices[0].message
-    let stream: any = null
-    let toolNames: string[] = []
 
+    // 2. If model wants to call tools
     if (message.tool_calls && message.tool_calls.length > 0) {
       const toolMessages = []
+      const toolNames: string[] = []
 
       for (const toolCall of message.tool_calls) {
         if (toolCall.type === 'function') {
@@ -230,7 +230,8 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
         }
       }
 
-      stream = await openai.chat.completions.create({
+      // 3. Second call — stream the final response with tool results as context
+      const finalStream = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
@@ -240,16 +241,50 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
         ],
         stream: true,
       })
-    } else {
-      stream = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ],
-        stream: true,
+
+      // 4. Stream the response
+      const encoder = new TextEncoder()
+      const readable = new ReadableStream({
+        async start(controller) {
+          // Emit internal step logs
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Analizando intención...' })}\n\n`))
+          await new Promise(r => setTimeout(r, 400))
+          
+          if (similarEntries && similarEntries.length > 0) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Revisando base de conocimiento general (${similarEntries.length} fuentes)` })}\n\n`))
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Ejecutando acción: ${toolNames.join(', ')}` })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta...' })}\n\n`))
+
+          for await (const chunk of finalStream) {
+            const text = chunk.choices[0]?.delta?.content || ''
+            if (text) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          controller.close()
+        }
+      })
+
+      return new Response(readable, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        }
       })
     }
+
+    // 5. If no tool calls — stream directly as before
+    const directStream = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages
+      ],
+      stream: true,
+    })
 
     const encoder = new TextEncoder()
     const readable = new ReadableStream({
@@ -261,13 +296,9 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Revisando base de conocimiento general (${similarEntries.length} fuentes)` })}\n\n`))
         }
 
-        if (toolNames.length > 0) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Ejecutando acción: ${toolNames.join(', ')}` })}\n\n`))
-        }
-
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta...' })}\n\n`))
 
-        for await (const chunk of stream) {
+        for await (const chunk of directStream) {
           const text = chunk.choices[0]?.delta?.content || ''
           if (text) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
