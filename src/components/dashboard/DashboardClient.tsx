@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { IConversation, IMessage } from '@/types/chat'
 import { ChatMessage, StreamUsage, streamChat } from '@/lib/openai'
 import { createClient } from '@/lib/supabase/client'
@@ -15,9 +16,19 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ userId, userName, userEmail }: DashboardClientProps) {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   const [conversations, setConversations] = useState<IConversation[]>([])
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    searchParams.get('id')
+  )
+
+  // Sync state when URL changes (e.g. back button)
+  useEffect(() => {
+    const id = searchParams.get('id')
+    setActiveConversationId(id)
+  }, [searchParams])
   const [isTyping, setIsTyping] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState<{ id: string, text: string, status: 'active' | 'done' }[]>([])

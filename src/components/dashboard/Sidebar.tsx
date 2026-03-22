@@ -57,6 +57,24 @@ const Sidebar = ({
     }
   }
 
+  const handleNewConversationClick = () => {
+    if (pathname !== '/dashboard') {
+      router.push('/dashboard')
+    } else {
+      onNewConversation()
+    }
+    onClose()
+  }
+
+  const handleSelectConversationClick = (id: string) => {
+    if (pathname !== '/dashboard') {
+      router.push(`/dashboard?id=${id}`)
+    } else {
+      onSelectConversation(id)
+    }
+    onClose()
+  }
+
   return (
     <div className="flex flex-col h-full bg-white text-gray-950">
       {/* Header */}
@@ -114,7 +132,7 @@ const Sidebar = ({
       {/* New conversation */}
       <div className="p-4 pl-5 pr-5 flex-shrink-0">
         <button
-          onClick={onNewConversation}
+          onClick={handleNewConversationClick}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
         >
           <Plus size={16} />
@@ -135,6 +153,7 @@ const Sidebar = ({
                   ? 'bg-indigo-50 text-indigo-600'
                   : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
               }`}
+              onClick={onClose}
             >
               <Icon size={18} className={isActive ? 'text-indigo-600' : 'text-gray-400'} />
               {label}
@@ -157,7 +176,7 @@ const Sidebar = ({
             return (
               <button
                 key={conv.id}
-                onClick={() => onSelectConversation(conv.id)}
+                onClick={() => handleSelectConversationClick(conv.id)}
                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors truncate border-l-2 ${
                   isActive
                     ? 'bg-indigo-50 text-indigo-600 border-indigo-600 font-medium'
