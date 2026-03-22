@@ -262,9 +262,18 @@ const ChatArea = ({
                 </div>
               )
             })}
-            {isTyping && (
+            {isTyping && !isThinking && (
                 <div className="max-w-[720px] mx-auto w-full">
                   <TypingIndicator />
+                </div>
+              )}
+
+              {(isThinking || thinkingSteps.some(s => s.status === 'active')) && (
+                <div className="flex items-start gap-3 max-w-[760px] mx-auto w-full mt-2 transition-opacity duration-300">
+                  <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-black flex-shrink-0 self-start mt-1 bg-indigo-600 text-white shadow-sm">
+                    N
+                  </div>
+                  <ThinkingLog steps={thinkingSteps} />
                 </div>
               )}
 
