@@ -227,79 +227,88 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
       systemPrompt += `\n\nFuentes utilizadas: ${similarEntries.map((e: any) => e.title).join(', ')}`
     }
 
-    // Primera llamada (no streaming) para gestionar tool calls
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages
-      ],
-      tools,
-      tool_choice: 'auto',
-      stream: false,
-    })
+    // --- Streaming Logic with Iterative Tool Calling ---
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const conversationMessages: any[] = [
+            { role: 'system' as const, content: systemPrompt },
+            ...messages
+          ]
 
-    const message = response.choices[0].message
+          let iterationCount = 0
+          const MAX_ITERATIONS = 5
 
-    // 2. If model wants to call tools
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      const toolMessages = []
-      const toolNames: string[] = []
-
-      for (const toolCall of message.tool_calls) {
-        if (toolCall.type === 'function') {
-          toolNames.push(toolCall.function.name)
-          const args = JSON.parse(toolCall.function.arguments)
-          
-          activityLogs.push({ type: 'tool_call', title: `Ejecutando: ${toolCall.function.name}`, data: args })
-          
-          const startTime = Date.now()
-          const result = await executeTool(toolCall.function.name, args, effectiveWorkspaceId, userId)
-          const duration = Date.now() - startTime
-
-          activityLogs.push({ type: 'tool_result', title: `Resultado: ${toolCall.function.name}`, duration, data: JSON.parse(result) })
-
-          if (toolCall.function.name === 'create_entry') {
-            activityLogs.push({ type: 'save', title: 'Guardando en base de conocimiento', detail: args.title })
-          }
-
-          toolMessages.push({
-            role: 'tool' as const,
-            tool_call_id: toolCall.id,
-            content: result
-          })
-        }
-      }
-
-      // 3. Second call — stream the final response with tool results as context
-      const finalStream = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages,
-          message,
-          ...toolMessages
-        ],
-        stream: true,
-      })
-
-      // 4. Stream the response
-      const encoder = new TextEncoder()
-      const readable = new ReadableStream({
-        async start(controller) {
-          // Emit internal step logs
+          // Initial status updates
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Analizando intención...' })}\n\n`))
-          
+
+          // Emit initial activity logs (RAG results)
           for (const log of activityLogs) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log })}\n\n`))
+            await new Promise(r => setTimeout(r, 50))
+          }
+
+          while (iterationCount < MAX_ITERATIONS) {
+            iterationCount++
+
+            const response = await openai.chat.completions.create({
+              model: 'gpt-4o',
+              messages: conversationMessages,
+              tools,
+              tool_choice: 'auto',
+              stream: false,
+            })
+
+            const assistantMessage = response.choices[0].message
+            conversationMessages.push(assistantMessage)
+
+            // If no tool calls — break the loop and stream final text
+            if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+              break
+            }
+
+            // Execute tool calls in this iteration
+            const toolNames: string[] = []
+            for (const toolCall of assistantMessage.tool_calls) {
+              if (toolCall.type === 'function') {
+                toolNames.push(toolCall.function.name)
+                const args = JSON.parse(toolCall.function.arguments)
+
+                // Emit tool call log
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log: { type: 'tool_call', title: `Ejecutando: ${toolCall.function.name}`, data: args } })}\n\n`))
+
+                const startTime = Date.now()
+                const result = await executeTool(toolCall.function.name, args, effectiveWorkspaceId, userId)
+                const duration = Date.now() - startTime
+
+                // Emit tool result log
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log: { type: 'tool_result', title: `Resultado: ${toolCall.function.name}`, duration, data: JSON.parse(result) } })}\n\n`))
+
+                if (toolCall.function.name === 'create_entry') {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log: { type: 'save', title: 'Guardando en base de conocimiento', detail: args.title } })}\n\n`))
+                }
+
+                conversationMessages.push({
+                  role: 'tool' as const,
+                  tool_call_id: toolCall.id,
+                  content: result
+                })
+              }
+            }
+
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Ejecutando: ${toolNames.join(', ')}` })}\n\n`))
             await new Promise(r => setTimeout(r, 100))
           }
-          
-          if (similarEntries && similarEntries.length > 0) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Revisando base de conocimiento general (${similarEntries.length} fuentes)` })}\n\n`))
-          }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Ejecutando acción: ${toolNames.join(', ')}` })}\n\n`))
+
+          // Final response streaming
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta final...' })}\n\n`))
+
+          const finalStream = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: conversationMessages,
+            stream: true,
+          })
 
           for await (const chunk of finalStream) {
             const text = chunk.choices[0]?.delta?.content || ''
@@ -307,54 +316,14 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
             }
           }
+
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        } catch (err: any) {
+          console.error('[Nukor API Error]:', err)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: err.message || 'Error interno del servidor' })}\n\n`))
+        } finally {
           controller.close()
         }
-      })
-
-      return new Response(readable, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        }
-      })
-    }
-
-    // 5. If no tool calls — stream directly as before
-    const directStream = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages
-      ],
-      stream: true,
-    })
-
-    const encoder = new TextEncoder()
-    const readable = new ReadableStream({
-      async start(controller) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Analizando intención...' })}\n\n`))
-        
-        for (const log of activityLogs) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log })}\n\n`))
-          await new Promise(r => setTimeout(r, 100))
-        }
-
-        if (similarEntries && similarEntries.length > 0) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Revisando base de conocimiento general (${similarEntries.length} fuentes)` })}\n\n`))
-        }
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta...' })}\n\n`))
-
-        for await (const chunk of directStream) {
-          const text = chunk.choices[0]?.delta?.content || ''
-          if (text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
-          }
-        }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-        controller.close()
       }
     })
 
