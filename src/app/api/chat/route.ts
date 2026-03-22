@@ -47,14 +47,14 @@ const tools: OpenAI.Chat.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'create_entry',
-      description: 'Save a new knowledge entry. Always call get_areas first to find the correct area_id before saving.',
+      description: 'Save a new knowledge entry. Use this whenever the user shares important information about the company.',
       parameters: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Short descriptive title' },
-          content: { type: 'string', description: 'Full structured content' },
-          area_id: { type: 'string', description: 'The ID of the area this entry belongs to. Call get_areas first to find the correct ID.' },
-          collection_id: { type: 'string', description: 'Optional collection ID' }
+          title: { type: 'string', description: 'Short descriptive title in Spanish' },
+          content: { type: 'string', description: 'Full structured content in Spanish' },
+          area_id: { type: 'string', description: 'Optional area ID to save to. Use get_areas first to find the right area.' },
+          collection_id: { type: 'string', description: 'Optional collection ID within the area' }
         },
         required: ['title', 'content']
       }
@@ -107,19 +107,41 @@ async function executeTool(name: string, args: any, workspaceId: string, userId:
       return JSON.stringify(data || [])
     }
     case 'create_entry': {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('entries')
         .insert({
           title: args.title,
           content: args.content,
-          area_id: args.area_id ?? null,
           collection_id: args.collection_id ?? null,
+          area_id: args.area_id ?? null,
           workspace_id: workspaceId,
           created_by: userId,
+          is_published: true,
         })
         .select()
         .single()
-      return JSON.stringify({ success: true, entry: data })
+
+      if (error) {
+        console.error('create_entry error:', error)
+        return JSON.stringify({ success: false, error: error.message })
+      }
+
+      // Generate embedding after saving
+      try {
+        const embeddingResponse = await openai.embeddings.create({
+          model: 'text-embedding-3-small',
+          input: `${args.title}\n\n${args.content}`,
+        })
+        const embedding = embeddingResponse.data[0].embedding
+        await supabase
+          .from('entries')
+          .update({ embedding: JSON.stringify(embedding) })
+          .eq('id', data.id)
+      } catch (embeddingError) {
+        console.error('Embedding failed:', embeddingError)
+      }
+
+      return JSON.stringify({ success: true, entry: { id: data.id, title: data.title } })
     }
     case 'update_entry': {
       const { data } = await supabase
