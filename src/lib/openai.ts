@@ -16,13 +16,13 @@ export interface StreamUsage {
   inputTokens: number
   outputTokens: number
 }
-
 export type StreamEvent =
   | { type: 'token'; content: string }
   | { type: 'step'; content: string }
   | { type: 'log'; log: any }
   | { type: 'done'; usage: StreamUsage }
   | { type: 'error'; error: string }
+  | { type: 'conversation'; id: string }
 
 
 /**
@@ -30,8 +30,9 @@ export type StreamEvent =
  * Yields StreamEvent objects — callers should handle each event type.
  */
 export async function* streamChat(
-  _workspaceId: string, // Ignored as per user request to test with hardcoded ID
-  messages: ChatMessage[]
+  _workspaceId: string,
+  messages: ChatMessage[],
+  conversationId?: string | null
 ): AsyncGenerator<StreamEvent> {
   const workspaceId = '00000000-0000-0000-0000-000000000001'
   console.log('Sending to /api/chat:', { messages, workspaceId })
@@ -44,7 +45,7 @@ export async function* streamChat(
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-      body: JSON.stringify({ workspaceId, messages }),
+      body: JSON.stringify({ workspaceId, messages, conversationId }),
     })
   } catch (err) {
     console.error('Fetch error:', err)
@@ -89,6 +90,8 @@ export async function* streamChat(
         } else if (parsed.type === 'token') {
           // Compatibility with existing route response format
           yield { type: 'token', content: parsed.content }
+        } else if (parsed.conversationId) {
+          yield { type: 'conversation', id: parsed.conversationId }
         } else if (parsed.type === 'error') {
           yield { type: 'error', error: parsed.error }
         }

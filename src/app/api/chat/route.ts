@@ -160,16 +160,20 @@ async function executeTool(name: string, args: any, workspaceId: string, userId:
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    // Get user but don't block if not found
     const { data: { user } } = await supabase.auth.getUser()
     const userId = user?.id || 'anonymous'
 
-    const { messages, workspaceId } = await request.json()
+    const { messages, workspaceId, conversationId: existingConversationId } = await request.json()
     const effectiveWorkspaceId = workspaceId || '00000000-0000-0000-0000-000000000001'
 
     if (!messages) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
     }
+
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
     // Generate embedding for the user's latest message
     const userMessage = messages[messages.length - 1].content
@@ -232,6 +236,26 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
     const readable = new ReadableStream({
       async start(controller) {
         try {
+          // 1. Ensure conversation exists
+          let conversationId = existingConversationId
+          if (!conversationId) {
+            const { data: conv, error: convErr } = await supabaseAdmin
+              .from('conversations')
+              .insert({
+                workspace_id: effectiveWorkspaceId,
+                user_id: userId,
+                title: userMessage.slice(0, 60) || 'Nueva conversación'
+              })
+              .select('id')
+              .single()
+            
+            if (convErr) throw convErr
+            conversationId = conv.id
+          }
+
+          // 2. Emit conversationId to client
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId })}\n\n`))
+
           const conversationMessages: any[] = [
             { role: 'system' as const, content: systemPrompt },
             ...messages
@@ -310,11 +334,67 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
             stream: true,
           })
 
+          let fullAssistantResponse = ''
           for await (const chunk of finalStream) {
             const text = chunk.choices[0]?.delta?.content || ''
             if (text) {
+              fullAssistantResponse += text
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
             }
+          }
+
+          // 3. Save messages to DB
+          try {
+            // Save user message
+            await supabaseAdmin.from('messages').insert({
+              conversation_id: conversationId,
+              role: 'user',
+              content: userMessage,
+              input_tokens: 0,
+              output_tokens: 0,
+              model: 'gpt-4o',
+            })
+
+            // Save assistant message
+            await supabaseAdmin.from('messages').insert({
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: fullAssistantResponse,
+              input_tokens: 0,
+              output_tokens: 0,
+              model: 'gpt-4o',
+            })
+
+            // Update conversation timestamp
+            await supabaseAdmin
+              .from('conversations')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', conversationId)
+
+            // 4. Generate better title for new conversations
+            if (!existingConversationId) {
+              const titleResponse = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'Generate a short title (max 6 words) in Spanish for this conversation based on the first message. Return only the title, nothing else.'
+                  },
+                  { role: 'user', content: userMessage }
+                ],
+                max_tokens: 20,
+              })
+
+              const title = titleResponse.choices[0].message.content?.trim().replace(/^"|"$/g, '')
+              if (title) {
+                await supabaseAdmin
+                  .from('conversations')
+                  .update({ title })
+                  .eq('id', conversationId)
+              }
+            }
+          } catch (dbErr) {
+            console.error('[Nukor DB Error]:', dbErr)
           }
 
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))

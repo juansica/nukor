@@ -12,5 +12,6 @@ export interface IConversation {
   id: string;
   title: string;
   messages: IMessage[];
-  createdAt: Date;
+  created_at: string;
+  updated_at: string;
 }

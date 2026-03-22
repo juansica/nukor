@@ -56,63 +56,50 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   )
 
+  // ─── Initial Load ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchConversations()
+  }, [])
+
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch('/api/conversations')
+      const data = await res.json()
+      setConversations(data.conversations || [])
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err)
+    }
+  }
+
+  // Effect to load messages when conversation changes
+  useEffect(() => {
+    if (activeConversationId) {
+      loadConversation(activeConversationId)
+    } else {
+      setThinkingSteps([])
+      setLogGroups([])
+    }
+  }, [activeConversationId])
+
+  const loadConversation = async (id: string) => {
+    try {
+      const res = await fetch(`/api/conversations/${id}`)
+      const data = await res.json()
+      
+      // Update local state without creating duplicates
+      setConversations(prev => prev.map(c => 
+        c.id === id ? { ...c, messages: data.messages || [] } : c
+      ))
+    } catch (err) {
+      console.error('Failed to load conversation:', err)
+    }
+  }
+
+
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null
   const currentWorkspaceId = userId || 'default'
 
-  // ─── Save to Supabase (silent) ──────────────────────────────────────────────
-  const persistMessages = async (
-    convId: string,
-    convTitle: string,
-    isNew: boolean,
-    userContent: string,
-    aiContent: string,
-    usage: StreamUsage | null
-  ) => {
-    try {
-      let activeDbConvId = convId
 
-      if (isNew) {
-        // Create conversation if it doesn't exist
-        const { data: conversation, error: convError } = await supabase
-          .from('conversations')
-          .insert({
-            id: convId, // Keep frontend UUID sync
-            workspace_id: currentWorkspaceId,
-            user_id: userId,
-            title: convTitle,
-          })
-          .select()
-          .single()
-
-        if (convError) {
-          console.error('[Nukor] Failed to create conversation:', convError)
-        } else if (conversation?.id) {
-          activeDbConvId = conversation.id
-        }
-      }
-
-      await supabase.from('messages').insert([
-        {
-          conversation_id: activeDbConvId,
-          role: 'user',
-          content: userContent,
-          input_tokens: 0,
-          output_tokens: 0,
-          model: 'gpt-4o',
-        },
-        {
-          conversation_id: activeDbConvId,
-          role: 'assistant',
-          content: aiContent,
-          input_tokens: usage?.inputTokens || 0,
-          output_tokens: usage?.outputTokens || 0,
-          model: 'gpt-4o',
-        },
-      ])
-    } catch (err) {
-      console.error('[Nukor] Failed to save conversation to Supabase:', err)
-    }
-  }
 
   // ─── Main send handler ───────────────────────────────────────────────────────
   const handleSendMessage = async (content: string) => {
@@ -127,7 +114,8 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
         id: crypto.randomUUID(),
         title: convTitle,
         messages: [],
-        createdAt: new Date(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       }
       convId = newConv.id
       setConversations((prev) => [newConv, ...prev])
@@ -173,7 +161,7 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
     }, ...prev])
 
     try {
-      for await (const event of streamChat(currentWorkspaceId, history)) {
+      for await (const event of streamChat(currentWorkspaceId, history, capturedId)) {
         if (event.type === 'error') {
           setIsThinking(false)
           if (!gotFirstToken) {
@@ -209,6 +197,17 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
               timestamp: new Date()
             }]
           } : group))
+          continue
+        }
+
+        if (event.type === 'conversation') {
+          if (!capturedId) {
+            convId = event.id
+            setActiveConversationId(event.id)
+            // Replace the temporary UUID in history if needed or just sync
+            router.push(`/dashboard?id=${event.id}`)
+            fetchConversations() // Refresh sidebar to show the new conversation
+          }
           continue
         }
 
@@ -268,6 +267,7 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
 
         if (event.type === 'done') {
           finalUsage = event.usage
+          fetchConversations() // Final refresh for title update
         }
       }
     } finally {
@@ -311,9 +311,24 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
         }
       }
     }
+  }
 
-    if (fullContent) {
-      persistMessages(capturedId, convTitle, isNew, content, fullContent, finalUsage)
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      const res = await fetch('/api/conversations', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      })
+      if (res.ok) {
+        if (activeConversationId === id) {
+          setActiveConversationId(null)
+          router.push('/dashboard')
+        }
+        fetchConversations()
+      }
+    } catch (err) {
+      console.error('Delete conversation error:', err)
     }
   }
 
@@ -377,6 +392,7 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
           activeConversationId={activeConversationId}
           onSelectConversation={handleSelectConversation}
           onNewConversation={handleNewConversation}
+          onDeleteConversation={handleDeleteConversation}
           userName={userName}
           userEmail={userEmail}
           onClose={() => setSidebarOpen(false)}

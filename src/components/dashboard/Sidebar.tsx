@@ -13,11 +13,11 @@ interface SidebarProps {
   userName: string
   userEmail: string
   onClose: () => void
+  onDeleteConversation?: (id: string) => void
 }
 
 const navItems = [
   { label: 'Base de conocimientos', Icon: BookOpen, path: '/dashboard/library' },
-  { label: 'Historial', Icon: Clock, path: '/dashboard/history' },
   { label: 'Áreas', Icon: Layers, path: '/dashboard/areas' },
 ]
 
@@ -29,6 +29,7 @@ const Sidebar = ({
   userName,
   userEmail,
   onClose,
+  onDeleteConversation,
 }: SidebarProps) => {
   const initials = userName.slice(0, 2).toUpperCase()
   const pathname = usePathname()
@@ -164,29 +165,67 @@ const Sidebar = ({
 
       <div className="mx-5 border-t border-gray-200 flex-shrink-0" />
 
-      {/* Conversations */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+      {/* Conversations grouped by date */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {conversations.length === 0 ? (
-          <p className="text-sm px-2 py-2 leading-relaxed text-gray-500">
+          <p className="text-xs px-2 py-2 leading-relaxed text-gray-400">
             Tus conversaciones aparecerán aquí
           </p>
         ) : (
-          conversations.map((conv) => {
-            const isActive = conv.id === activeConversationId
-            return (
-              <button
-                key={conv.id}
-                onClick={() => handleSelectConversationClick(conv.id)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors truncate border-l-2 ${
-                  isActive
-                    ? 'bg-indigo-50 text-indigo-600 border-indigo-600 font-medium'
-                    : 'text-gray-600 border-transparent hover:bg-slate-50 hover:text-gray-900 font-medium'
-                }`}
-              >
-                {conv.title || 'Nueva conversación'}
-              </button>
-            )
-          })
+          (() => {
+            const today = new Date()
+            const yesterday = new Date(today)
+            yesterday.setDate(yesterday.getDate() - 1)
+            const lastWeek = new Date(today)
+            lastWeek.setDate(lastWeek.getDate() - 7)
+
+            const grouped = {
+              'Hoy': conversations.filter(c => new Date(c.updated_at || c.created_at).toDateString() === today.toDateString()),
+              'Ayer': conversations.filter(c => new Date(c.updated_at || c.created_at).toDateString() === yesterday.toDateString()),
+              'Esta semana': conversations.filter(c => {
+                const d = new Date(c.updated_at || c.created_at)
+                return d > lastWeek && d.toDateString() !== today.toDateString() && d.toDateString() !== yesterday.toDateString()
+              }),
+              'Anteriores': conversations.filter(c => new Date(c.updated_at || c.created_at) <= lastWeek)
+            }
+
+            return Object.entries(grouped).map(([label, convs]) => (
+              convs.length > 0 && (
+                <div key={label} className="space-y-1">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-1">{label}</p>
+                  {convs.map((conv) => {
+                    const isActive = conv.id === activeConversationId
+                    return (
+                      <div
+                        key={conv.id}
+                        className="group relative"
+                      >
+                        <button
+                          onClick={() => handleSelectConversationClick(conv.id)}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all truncate pr-8 ${
+                            isActive
+                              ? 'bg-indigo-50 text-indigo-600 font-semibold'
+                              : 'text-gray-600 hover:bg-slate-50 hover:text-gray-900 font-medium'
+                          }`}
+                        >
+                          {conv.title || 'Nueva conversación'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onDeleteConversation?.(conv.id)
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-red-50"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            ))
+          })()
         )}
       </div>
 
