@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { prisma } from '@/lib/prisma'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,8 +20,14 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
     }
 
-    const entry = await prisma.entry.create({
-      data: {
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    const { data: entry, error: insertError } = await supabaseAdmin
+      .from('entries')
+      .insert({
         title,
         content,
         workspace_id: workspace_id || '00000000-0000-0000-0000-000000000001',
@@ -29,8 +35,13 @@ export async function POST(request: NextRequest) {
         collection_id: collection_id ?? null,
         created_by: user.id,
         is_published: true,
-      }
-    })
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      return new Response(JSON.stringify({ error: insertError.message }), { status: 500 })
+    }
 
     // Generate and save embedding (non-fatal if it fails)
     try {
@@ -43,15 +54,9 @@ export async function POST(request: NextRequest) {
 
       const embedding = embeddingResponse.data[0].embedding
 
-      // Use service-role admin client to bypass RLS when writing the embedding
-      const supabaseAdmin = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-
       const { error: embeddingError } = await supabaseAdmin
         .from('entries')
-        .update({ embedding })
+        .update({ embedding: JSON.stringify(embedding) })
         .eq('id', entry.id)
 
       if (embeddingError) {
@@ -61,7 +66,6 @@ export async function POST(request: NextRequest) {
       }
     } catch (embeddingError) {
       console.error('Embedding generation failed:', embeddingError)
-      // Don't fail the request — entry is saved, just won't be searchable yet
     }
 
     return new Response(JSON.stringify({ entry }), { status: 201 })
