@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
@@ -31,19 +32,33 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Generate and save embedding (non-fatal if it fails)
     try {
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
       const embeddingResponse = await openai.embeddings.create({
         model: 'text-embedding-3-small',
-        input: `${title}\n${content}`,
+        input: `${title}\n\n${content}`,
       })
 
       const embedding = embeddingResponse.data[0].embedding
 
-      await supabase
+      // Use service-role admin client to bypass RLS when writing the embedding
+      const supabaseAdmin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+
+      const { error: embeddingError } = await supabaseAdmin
         .from('entries')
-        .update({ embedding: JSON.stringify(embedding) })
+        .update({ embedding })
         .eq('id', entry.id)
+
+      if (embeddingError) {
+        console.error('Failed to save embedding:', embeddingError)
+      } else {
+        console.log('Embedding generated successfully for entry:', entry.id)
+      }
     } catch (embeddingError) {
       console.error('Embedding generation failed:', embeddingError)
       // Don't fail the request — entry is saved, just won't be searchable yet
