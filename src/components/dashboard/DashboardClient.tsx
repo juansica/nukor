@@ -61,29 +61,43 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
     usage: StreamUsage | null
   ) => {
     try {
+      let activeDbConvId = convId
+
       if (isNew) {
-        await supabase.from('conversations').insert({
-          id: convId,
-          workspace_id: currentWorkspaceId,
-          user_id: userId,
-          title: convTitle,
-        })
+        // Create conversation if it doesn't exist
+        const { data: conversation, error: convError } = await supabase
+          .from('conversations')
+          .insert({
+            id: convId, // Keep frontend UUID sync
+            workspace_id: currentWorkspaceId,
+            user_id: userId,
+            title: convTitle,
+          })
+          .select()
+          .single()
+
+        if (convError) {
+          console.error('[Nukor] Failed to create conversation:', convError)
+        } else if (conversation?.id) {
+          activeDbConvId = conversation.id
+        }
       }
+
       await supabase.from('messages').insert([
         {
-          conversation_id: convId,
+          conversation_id: activeDbConvId,
           role: 'user',
           content: userContent,
           input_tokens: 0,
           output_tokens: 0,
-          model: null,
+          model: 'gpt-4o',
         },
         {
-          conversation_id: convId,
+          conversation_id: activeDbConvId,
           role: 'assistant',
           content: aiContent,
-          input_tokens: usage?.inputTokens ?? 0,
-          output_tokens: usage?.outputTokens ?? 0,
+          input_tokens: usage?.inputTokens || 0,
+          output_tokens: usage?.outputTokens || 0,
           model: 'gpt-4o',
         },
       ])
