@@ -74,6 +74,22 @@ const tools: OpenAI.Chat.ChatCompletionTool[] = [
         required: ['entry_id', 'content']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_collection',
+      description: 'Create a new collection inside an area when no suitable collection exists. Use this proactively — do not ask the user for permission.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Collection name in Spanish, descriptive and concise' },
+          area_id: { type: 'string', description: 'The area ID where the collection will be created' },
+          description: { type: 'string', description: 'Brief description of what this collection contains' }
+        },
+        required: ['name', 'area_id']
+      }
+    }
   }
 ]
 
@@ -152,6 +168,22 @@ async function executeTool(name: string, args: any, workspaceId: string, userId:
         .single()
       return JSON.stringify({ success: true, entry: data })
     }
+    case 'create_collection': {
+      const { data, error } = await supabase
+        .from('collections')
+        .insert({
+          name: args.name,
+          area_id: args.area_id,
+          workspace_id: workspaceId,
+          description: args.description ?? null,
+          created_by: userId,
+        })
+        .select()
+        .single()
+
+      if (error) return JSON.stringify({ success: false, error: error.message })
+      return JSON.stringify({ success: true, collection: { id: data.id, name: data.name } })
+    }
     default:
       return JSON.stringify({ error: 'Unknown tool' })
   }
@@ -207,21 +239,21 @@ Tienes acceso a herramientas para consultar la base de conocimiento:
 - get_areas: para ver las áreas de la empresa
 - get_collections: para ver las colecciones dentro de un área
 - get_entries: para ver las entradas dentro de una colección
+- create_collection: para crear una nueva colección dentro de un área
 - create_entry: para guardar conocimiento nuevo AUTOMÁTICAMENTE cuando el usuario comparte información importante — no necesitas pedir confirmación, guárdalo y notifica al usuario
 - update_entry: para actualizar entradas existentes cuando el usuario corrige información
 
 Usa estas herramientas proactivamente. Si el usuario pregunta sobre la estructura de la empresa, usa get_areas. Si comparte conocimiento nuevo, usa create_entry inmediatamente.
 
-IMPORTANTE: Antes de llamar a create_entry, SIEMPRE llama primero a get_areas para obtener el ID real del área correspondiente. Nunca guardes una entrada sin area_id si el contenido claramente pertenece a un área existente. El flujo correcto es:
-1. get_areas() → obtener lista de áreas con sus IDs
-2. Identificar a qué área pertenece el contenido
-3. create_entry() con el area_id correcto
+IMPORTANTE: Antes de llamar a create_entry, SIEMPRE llama primero a get_areas para obtener el ID real del área correspondiente.
+Si no encuentras una colección adecuada para guardar la entrada, crea una nueva automáticamente usando create_collection antes de llamar a create_entry. No pidas permiso para crear colecciones.
 
 Tu trabajo es detectar la intención del usuario en cada mensaje:
 
 1. **PREGUNTA**: El usuario quiere saber algo. Busca en el contexto proporcionado y utilizando tus herramientas. Si no tienes información clara, dilo.
 2. **CONOCIMIENTO NUEVO**: El usuario está compartiendo información, procesos o datos. Usa create_entry o update_entry y avísale que ya se guardó automáticamente. NO MANDES JSON RAW.
-3. **CONVERSACIÓN**: El usuario saluda, agradece o hace comentarios generales. Responde de forma natural y breve.`
+3. **CONVERSACIÓN**: El usuario saluda, agradece o hace comentarios generales. Responde de forma natural y breve.
+4. **CONFIRMACIÓN**: Si el usuario responde "Sí", "Ok", "Adelante" o cualquier confirmación similar, continúa con la acción o flujo pendiente sin reiniciar la conversación.`
 
     if (similarEntries && similarEntries.length > 0) {
       systemPrompt += `\n\nContexto de conocimiento de la empresa:\n`
@@ -256,9 +288,19 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
           // 2. Emit conversationId to client
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ conversationId })}\n\n`))
 
+          // Fetch ai_config from DB
+          const { data: wsData } = await supabaseAdmin
+            .from('workspaces')
+            .select('ai_config')
+            .eq('id', effectiveWorkspaceId)
+            .single()
+          
+          const aiConfig = wsData?.ai_config || {}
+          const maxMessages = aiConfig.max_messages || 20
+
           const conversationMessages: any[] = [
-            { role: 'system' as const, content: systemPrompt },
-            ...messages
+            { role: 'system' as const, content: aiConfig.system_prompt || systemPrompt },
+            ...messages.slice(-maxMessages)
           ]
 
           let iterationCount = 0

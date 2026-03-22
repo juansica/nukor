@@ -186,6 +186,7 @@ model Workspace {
   templates         Template[]
   user_roles        UserRole[]
   ai_usage          AiUsage[]
+  ai_config         Json?
 
   @@index([slug])
   @@index([created_by])

@@ -134,11 +134,15 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
       prev.map((c) => (c.id === capturedId ? { ...c, messages: [...c.messages, userMsg] } : c))
     )
 
+    const MAX_MESSAGES = 20
     const currentConv = conversations.find((c) => c.id === capturedId)
-    const history: ChatMessage[] = [
-      ...(currentConv?.messages ?? []).map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content },
-    ]
+    const allMessages = [...(currentConv?.messages ?? []), userMsg]
+    const history: ChatMessage[] = allMessages.slice(-MAX_MESSAGES).map((m) => ({ 
+      role: m.role, 
+      content: m.content 
+    }))
+
+    console.log('[Nukor] Sending history:', history.length, 'messages')
 
     setIsTyping(true)
     setIsStreaming(true)
