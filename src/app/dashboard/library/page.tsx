@@ -271,30 +271,44 @@ function LibraryClient() {
         setUserEmail(user.email ?? '')
       }
 
+      console.log('[Library] Fetching data for workspace:', DEFAULT_WORKSPACE_ID)
+
       // Fetch Areas
-      const aRes = await fetch('/api/areas')
-      if (aRes.ok) {
-        const aData = await aRes.json()
-        setAreas(Array.isArray(aData) ? aData : [])
-      }
+      const { data: aData, error: aError } = await supabase
+        .from('areas')
+        .select('*, collections(id), entries(id)')
+        .eq('workspace_id', DEFAULT_WORKSPACE_ID)
+        .order('name')
+      
+      if (aError) console.error('[Library] Areas error:', aError)
+      console.log('[Library] Areas found:', aData?.length || 0)
+      setAreas(Array.isArray(aData) ? aData : [])
 
       if (areaId) {
-        const cRes = await fetch(`/api/collections?areaId=${areaId}`)
-        if (cRes.ok) {
-          const cData = await cRes.json()
-          setCollections(Array.isArray(cData) ? cData : [])
-        }
+        const { data: cData, error: cError } = await supabase
+          .from('collections')
+          .select('*, entries(id)')
+          .eq('area_id', areaId)
+          .eq('workspace_id', DEFAULT_WORKSPACE_ID)
+          .order('name')
+        
+        if (cError) console.error('[Library] Collections error:', cError)
+        console.log('[Library] Collections found:', cData?.length || 0)
+        setCollections(Array.isArray(cData) ? cData : [])
       }
 
-      const { data: eData } = await supabase
+      const { data: eData, error: eError } = await supabase
         .from('entries')
         .select('*, profiles(email, full_name)')
         .eq('workspace_id', DEFAULT_WORKSPACE_ID)
         .is('deleted_at', null)
+        .order('created_at', { ascending: false })
 
+      if (eError) console.error('[Library] Entries error:', eError)
+      console.log('[Library] Entries found:', eData?.length || 0)
       setEntries(Array.isArray(eData) ? eData as any : [])
     } catch (err: any) {
-      console.error('[Library] Error fetching data:', err)
+      console.error('[Library] Error in fetchData:', err)
       toast.error('Error al cargar datos. Por favor, recarga la página.')
     } finally {
       setLoading(false)
