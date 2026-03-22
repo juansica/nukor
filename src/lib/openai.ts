@@ -19,6 +19,7 @@ export interface StreamUsage {
 
 export type StreamEvent =
   | { type: 'token'; content: string }
+  | { type: 'step'; content: string }
   | { type: 'done'; usage: StreamUsage }
   | { type: 'error'; error: string }
 
@@ -78,7 +79,9 @@ export async function* streamChat(
 
       try {
         const parsed = JSON.parse(data)
-        if (parsed.text) {
+        if (parsed.step) {
+          yield { type: 'step', content: parsed.step }
+        } else if (parsed.text) {
           yield { type: 'token', content: parsed.text }
         } else if (parsed.type === 'token') {
           // Compatibility with existing route response format

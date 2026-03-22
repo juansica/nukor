@@ -20,6 +20,8 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [isTyping, setIsTyping] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [thinkingSteps, setThinkingSteps] = useState<{ id: string, text: string, status: 'active' | 'done' }[]>([])
+  const [isThinking, setIsThinking] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   )
@@ -114,9 +116,13 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
     let gotFirstToken = false
     let finalUsage: StreamUsage | null = null
 
+    setThinkingSteps([])
+    setIsThinking(true)
+
     try {
       for await (const event of streamChat(currentWorkspaceId, history)) {
         if (event.type === 'error') {
+          setIsThinking(false)
           if (!gotFirstToken) {
             setIsTyping(false)
             setConversations((prev) =>
@@ -141,10 +147,21 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
           break
         }
 
+        if (event.type === 'step') {
+          setThinkingSteps(prev => [
+            ...prev.map(s => ({ ...s, status: 'done' as const })),
+            { id: Date.now().toString(), text: event.content, status: 'active' }
+          ])
+          continue
+        }
+
         if (event.type === 'token') {
           if (!gotFirstToken) {
             gotFirstToken = true
             setIsTyping(false)
+            setIsThinking(false)
+            setThinkingSteps(prev => prev.map(s => ({ ...s, status: 'done' })))
+            
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === capturedId
@@ -181,6 +198,7 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
     } finally {
       setIsTyping(false)
       setIsStreaming(false)
+      setIsThinking(false)
       
       // After stream completes, check for save intent
       const jsonMatch = fullContent.match(/\{"intent":"save".*?\}/)
@@ -300,6 +318,8 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
           suggestedEntry={suggestedEntry}
           onSaveSuggestedEntry={handleSaveSuggestedEntry}
           onDiscardSuggestedEntry={() => setSuggestedEntry(null)}
+          thinkingSteps={thinkingSteps}
+          isThinking={isThinking}
         />
       </div>
     </div>

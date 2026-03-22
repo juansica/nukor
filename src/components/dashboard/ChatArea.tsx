@@ -46,6 +46,8 @@ interface ChatAreaProps {
   suggestedEntry?: { title: string, content: string } | null
   onSaveSuggestedEntry?: () => void
   onDiscardSuggestedEntry?: () => void
+  thinkingSteps?: { id: string, text: string, status: 'active' | 'done' }[]
+  isThinking?: boolean
 }
 
 const parseMessageContent = (content: string) => {
@@ -57,6 +59,25 @@ const parseMessageContent = (content: string) => {
     return { mainContent, sources }
   }
   return { mainContent: content, sources: [] }
+}
+
+function ThinkingLog({ steps }: { steps: { id: string, text: string, status: 'active' | 'done' }[] }) {
+  return (
+    <div className="flex flex-col gap-2 px-5 py-4 bg-slate-50 border border-gray-100 rounded-2xl max-w-[400px] shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
+      {steps.map((step) => (
+        <div key={step.id} className="flex items-center gap-3 text-sm">
+          {step.status === 'active' ? (
+            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse flex-shrink-0" />
+          ) : (
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 flex-shrink-0" />
+          )}
+          <span className={`font-medium tracking-tight ${step.status === 'done' ? 'text-gray-400' : 'text-gray-600'}`}>
+            {step.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 const ChatArea = ({
@@ -71,6 +92,8 @@ const ChatArea = ({
   suggestedEntry,
   onSaveSuggestedEntry,
   onDiscardSuggestedEntry,
+  thinkingSteps = [],
+  isThinking = false,
 }: ChatAreaProps) => {
   const supabase = createClient()
   const messagesEndRef = useRef<HTMLDivElement>(null)

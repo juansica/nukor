@@ -74,6 +74,21 @@ IMPORTANTE: Solo incluye el JSON de guardado cuando estés seguro de que el usua
     const encoder = new TextEncoder()
     const readable = new ReadableStream({
       async start(controller) {
+        // Initial reflection
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Analizando tu mensaje...' })}\n\n`))
+        await new Promise(r => setTimeout(r, 400))
+        
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Buscando en la base de conocimiento...' })}\n\n`))
+
+        // Re-calculate or just use the similarEntries from above
+        if (similarEntries && similarEntries.length > 0) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Encontré ${similarEntries.length} entradas relevantes` })}\n\n`))
+        } else {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'No encontré contexto relevante' })}\n\n`))
+        }
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta...' })}\n\n`))
+
         for await (const chunk of stream) {
           const text = chunk.choices[0]?.delta?.content || ''
           if (text) {
