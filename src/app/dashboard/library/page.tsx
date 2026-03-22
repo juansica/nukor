@@ -229,8 +229,10 @@ function EntryDetailDrawer({ entry, currentUserId, onClose, onUpdate }: { entry:
   )
 }
 
+import { Suspense } from 'react'
+
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function LibraryPage() {
+function LibraryClient() {
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -455,5 +457,17 @@ export default function LibraryPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function LibraryPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-[#F1F3F6]">
+        <div className="animate-pulse text-gray-400 font-medium">Cargando biblioteca...</div>
+      </div>
+    }>
+      <LibraryClient />
+    </Suspense>
   )
 }
