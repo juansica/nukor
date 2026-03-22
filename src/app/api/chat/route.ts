@@ -47,13 +47,14 @@ const tools: OpenAI.Chat.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'create_entry',
-      description: 'Save a new knowledge entry to the database when the user shares important information',
+      description: 'Save a new knowledge entry. Always call get_areas first to find the correct area_id before saving.',
       parameters: {
         type: 'object',
         properties: {
           title: { type: 'string', description: 'Short descriptive title' },
           content: { type: 'string', description: 'Full structured content' },
-          collection_id: { type: 'string', description: 'Optional collection ID to save to' }
+          area_id: { type: 'string', description: 'The ID of the area this entry belongs to. Call get_areas first to find the correct ID.' },
+          collection_id: { type: 'string', description: 'Optional collection ID' }
         },
         required: ['title', 'content']
       }
@@ -111,6 +112,7 @@ async function executeTool(name: string, args: any, workspaceId: string, userId:
         .insert({
           title: args.title,
           content: args.content,
+          area_id: args.area_id ?? null,
           collection_id: args.collection_id ?? null,
           workspace_id: workspaceId,
           created_by: userId,
@@ -175,6 +177,11 @@ Tienes acceso a herramientas para consultar la base de conocimiento:
 - update_entry: para actualizar entradas existentes cuando el usuario corrige información
 
 Usa estas herramientas proactivamente. Si el usuario pregunta sobre la estructura de la empresa, usa get_areas. Si comparte conocimiento nuevo, usa create_entry inmediatamente.
+
+IMPORTANTE: Antes de llamar a create_entry, SIEMPRE llama primero a get_areas para obtener el ID real del área correspondiente. Nunca guardes una entrada sin area_id si el contenido claramente pertenece a un área existente. El flujo correcto es:
+1. get_areas() → obtener lista de áreas con sus IDs
+2. Identificar a qué área pertenece el contenido
+3. create_entry() con el area_id correcto
 
 Tu trabajo es detectar la intención del usuario en cada mensaje:
 
