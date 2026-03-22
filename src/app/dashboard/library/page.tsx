@@ -366,7 +366,7 @@ function LibraryClient() {
   return (
     <div className="h-screen flex overflow-hidden bg-[#F1F3F6]">
       <aside className={`fixed md:relative inset-y-0 left-0 z-50 w-64 h-full bg-white border-r border-gray-200 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <Sidebar conversations={[]} activeConversationId={null} onSelectConversation={() => {}} onNewConversation={() => {}} userName={userName} userEmail={userEmail} onClose={() => setSidebarOpen(false)} />
+        <Sidebar activeConversationId={null} onSelectConversation={() => {}} onNewConversation={() => {}} userName={userName} userEmail={userEmail} onClose={() => setSidebarOpen(false)} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">

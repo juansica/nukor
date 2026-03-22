@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
     const { data: similarEntries } = await supabase.rpc('match_entries', {
       query_embedding: embedding,
       workspace_id: effectiveWorkspaceId,
-      match_threshold: 0.5,
+      match_threshold: 0.1,
       match_count: 5,
     })
 

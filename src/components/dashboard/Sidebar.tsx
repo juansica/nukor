@@ -6,7 +6,6 @@ import SignOutButton from '@/components/auth/SignOutButton'
 import { Plus, Clock, BookOpen, Layers, ChevronDown, X, Check } from 'lucide-react'
 
 interface SidebarProps {
-  conversations: IConversation[]
   activeConversationId: string | null
   onSelectConversation: (id: string) => void
   onNewConversation: () => void
@@ -22,7 +21,6 @@ const navItems = [
 ]
 
 const Sidebar = ({
-  conversations,
   activeConversationId,
   onSelectConversation,
   onNewConversation,
@@ -39,6 +37,22 @@ const Sidebar = ({
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const workspaceRef = useRef<HTMLDivElement>(null)
+
+  const [conversations, setConversations] = useState<IConversation[]>([])
+
+  const refreshConversations = async () => {
+    try {
+      const res = await fetch('/api/conversations')
+      const data = await res.json()
+      setConversations(data.conversations || [])
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err)
+    }
+  }
+
+  useEffect(() => {
+    refreshConversations()
+  }, [pathname])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

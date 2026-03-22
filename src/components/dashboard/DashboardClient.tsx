@@ -388,7 +388,6 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
         `}
       >
         <Sidebar
-          conversations={conversations}
           activeConversationId={activeConversationId}
           onSelectConversation={handleSelectConversation}
           onNewConversation={handleNewConversation}
