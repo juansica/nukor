@@ -167,6 +167,14 @@ export async function POST(request: NextRequest) {
       match_count: 5,
     })
 
+    const activityLogs: any[] = []
+    activityLogs.push({ type: 'rag_search', title: 'Buscando en base de conocimiento', detail: userMessage.slice(0, 60) })
+    activityLogs.push({
+      type: 'rag_result',
+      title: similarEntries && similarEntries.length > 0 ? `${similarEntries.length} entradas relevantes encontradas` : 'Sin contexto relevante',
+      data: similarEntries?.map((e: any) => ({ title: e.title, similarity: e.similarity }))
+    })
+
     let systemPrompt = `Eres Nukor, el asistente de conocimiento interno de esta empresa. Respondes siempre en español latinoamericano.
 
 Tienes acceso a herramientas para consultar la base de conocimiento:
@@ -220,7 +228,18 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
         if (toolCall.type === 'function') {
           toolNames.push(toolCall.function.name)
           const args = JSON.parse(toolCall.function.arguments)
+          
+          activityLogs.push({ type: 'tool_call', title: `Ejecutando: ${toolCall.function.name}`, data: args })
+          
+          const startTime = Date.now()
           const result = await executeTool(toolCall.function.name, args, effectiveWorkspaceId, userId)
+          const duration = Date.now() - startTime
+
+          activityLogs.push({ type: 'tool_result', title: `Resultado: ${toolCall.function.name}`, duration, data: JSON.parse(result) })
+
+          if (toolCall.function.name === 'create_entry') {
+            activityLogs.push({ type: 'save', title: 'Guardando en base de conocimiento', detail: args.title })
+          }
 
           toolMessages.push({
             role: 'tool' as const,
@@ -248,13 +267,17 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
         async start(controller) {
           // Emit internal step logs
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Analizando intención...' })}\n\n`))
-          await new Promise(r => setTimeout(r, 400))
+          
+          for (const log of activityLogs) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log })}\n\n`))
+            await new Promise(r => setTimeout(r, 100))
+          }
           
           if (similarEntries && similarEntries.length > 0) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Revisando base de conocimiento general (${similarEntries.length} fuentes)` })}\n\n`))
           }
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Ejecutando acción: ${toolNames.join(', ')}` })}\n\n`))
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta...' })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Generando respuesta final...' })}\n\n`))
 
           for await (const chunk of finalStream) {
             const text = chunk.choices[0]?.delta?.content || ''
@@ -290,8 +313,12 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
     const readable = new ReadableStream({
       async start(controller) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: 'Analizando intención...' })}\n\n`))
-        await new Promise(r => setTimeout(r, 400))
         
+        for (const log of activityLogs) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ log })}\n\n`))
+          await new Promise(r => setTimeout(r, 100))
+        }
+
         if (similarEntries && similarEntries.length > 0) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ step: `Revisando base de conocimiento general (${similarEntries.length} fuentes)` })}\n\n`))
         }

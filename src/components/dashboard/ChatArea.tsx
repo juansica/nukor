@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Send, Menu, Sparkles, BookmarkPlus, Check, X, ArrowUp } from 'lucide-react'
+import { Plus, Send, Menu, Sparkles, BookmarkPlus, Check, X, ArrowUp, Activity } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import type { LogEntry } from '@/components/dashboard/DashboardClient'
 
 const SUGGESTIONS = [
   '¿Cuál es nuestro proceso de onboarding?',
@@ -49,6 +50,8 @@ interface ChatAreaProps {
   onDiscardSuggestedEntry?: () => void
   thinkingSteps?: { id: string, text: string, status: 'active' | 'done' }[]
   isThinking?: boolean
+  logs?: LogEntry[]
+  onClearLogs?: () => void
 }
 
 const parseMessageContent = (content: string) => {
@@ -81,6 +84,68 @@ function ThinkingLog({ steps }: { steps: { id: string, text: string, status: 'ac
   )
 }
 
+function LogEntryView({ log }: { log: LogEntry }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const icons: Record<string, string> = {
+    thinking: '🧠',
+    tool_call: '🔧',
+    tool_result: '📦',
+    rag_search: '🔍',
+    rag_result: '📚',
+    response: '✨',
+    save: '💾',
+    error: '❌'
+  }
+
+  const colors: Record<string, string> = {
+    thinking: 'text-purple-600 bg-purple-50 border-purple-100',
+    tool_call: 'text-blue-600 bg-blue-50 border-blue-100',
+    tool_result: 'text-green-600 bg-green-50 border-green-100',
+    rag_search: 'text-orange-600 bg-orange-50 border-orange-100',
+    rag_result: 'text-teal-600 bg-teal-50 border-teal-100',
+    response: 'text-indigo-600 bg-indigo-50 border-indigo-100',
+    save: 'text-emerald-600 bg-emerald-50 border-emerald-100',
+    error: 'text-red-600 bg-red-50 border-red-100'
+  }
+
+  const logType = log.type || 'thinking'
+  const icon = icons[logType] || '⚪'
+  const color = colors[logType] || 'text-gray-600 bg-gray-50 border-gray-100'
+
+  return (
+    <div className={`rounded-lg border p-3 ${color}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-sm flex-shrink-0">{icon}</span>
+          <span className="text-xs font-medium truncate">{log.title}</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {log.duration && (
+            <span className="text-xs opacity-60">{log.duration}ms</span>
+          )}
+          {log.data && (
+            <button onClick={() => setExpanded(!expanded)} className="text-xs opacity-60 hover:opacity-100 px-1">
+              {expanded ? '▲' : '▼'}
+            </button>
+          )}
+        </div>
+      </div>
+      {log.detail && (
+        <p className="text-xs opacity-70 mt-1 ml-6">{log.detail}</p>
+      )}
+      {expanded && log.data && (
+        <pre className="text-xs mt-2 ml-6 overflow-x-auto opacity-80 bg-white/50 rounded p-2">
+          {JSON.stringify(log.data, null, 2)}
+        </pre>
+      )}
+      <p className="text-xs opacity-40 mt-1 ml-6">
+        {new Date(log.timestamp).toLocaleTimeString('es-CL')}
+      </p>
+    </div>
+  )
+}
+
 const ChatArea = ({
   conversation,
   isTyping,
@@ -95,6 +160,8 @@ const ChatArea = ({
   onDiscardSuggestedEntry,
   thinkingSteps = [],
   isThinking = false,
+  logs = [],
+  onClearLogs,
 }: ChatAreaProps) => {
   const supabase = createClient()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -102,6 +169,22 @@ const ChatArea = ({
   const [entryTitle, setEntryTitle] = useState('')
   const [entryContent, setEntryContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [hasNewLogs, setHasNewLogs] = useState(false)
+  const prevLogsLengthRef = useRef(logs?.length || 0)
+
+  useEffect(() => {
+    if ((logs?.length || 0) > prevLogsLengthRef.current && !logsOpen) {
+      setHasNewLogs(true)
+    }
+    prevLogsLengthRef.current = logs?.length || 0
+  }, [logs?.length, logsOpen])
+
+  const handleToggleLogs = () => {
+    setLogsOpen(!logsOpen)
+    if (!logsOpen) setHasNewLogs(false)
+  }
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'
@@ -162,19 +245,31 @@ const ChatArea = ({
   return (
     <div className="flex flex-col h-full min-h-0 bg-white shadow-sm rounded-xl m-2 md:m-3 border border-gray-200 overflow-hidden relative">
       {/* Top bar */}
-      <div className="flex-shrink-0 flex items-center h-14 px-4 border-b border-gray-200 bg-white">
+      <div className="flex-shrink-0 flex items-center justify-between h-14 px-4 border-b border-gray-200 bg-white">
+        <div className="flex flex-row items-center">
+          <button
+            onClick={onToggleSidebar}
+            className="p-1.5 rounded-lg transition-colors hover:bg-slate-50 mr-3 text-gray-500"
+            aria-label="Toggle sidebar"
+          >
+            <Menu size={18} />
+          </button>
+          {conversation && (
+            <span className="text-sm font-semibold tracking-tight truncate text-gray-950">
+              {conversation.title}
+            </span>
+          )}
+        </div>
         <button
-          onClick={onToggleSidebar}
-          className="p-1.5 rounded-lg transition-colors hover:bg-slate-50 mr-3 text-gray-500"
-          aria-label="Toggle sidebar"
+          onClick={handleToggleLogs}
+          className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Ver actividad del asistente"
         >
-          <Menu size={18} />
+          <Activity className="w-5 h-5 text-gray-500" />
+          {hasNewLogs && (
+            <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 border-2 border-white rounded-full" />
+          )}
         </button>
-        {conversation && (
-          <span className="text-sm font-semibold tracking-tight truncate text-gray-950">
-            {conversation.title}
-          </span>
-        )}
       </div>
 
       {/* Messages / Welcome */}
@@ -304,6 +399,42 @@ const ChatArea = ({
 
       {/* Input bar */}
       <ChatInput onSend={onSendMessage} disabled={isTyping || isStreaming} />
+
+      {/* Logs Panel */}
+      {logsOpen && (
+        <div className="absolute right-0 top-14 bottom-0 w-80 bg-white border-l border-gray-200 shadow-xl z-40 flex flex-col animate-in slide-in-from-right-full duration-200">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-indigo-500" />
+              <span className="font-semibold text-sm text-gray-900">Actividad del asistente</span>
+            </div>
+            <button onClick={() => setLogsOpen(false)} className="p-1 hover:bg-gray-100 rounded-md transition-colors">
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            {(!logs || logs.length === 0) ? (
+              <p className="text-sm text-gray-400 text-center mt-8 px-4">
+                Los logs de actividad aparecerán aquí durante la conversación.
+              </p>
+            ) : (
+              logs.map((log) => <LogEntryView key={log.id} log={log} />)
+            )}
+          </div>
+
+          {logs && logs.length > 0 && (
+            <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+              <button
+                onClick={onClearLogs}
+                className="text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors w-full text-center"
+              >
+                Limpiar logs
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Save Entry Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleCloseModal()}>

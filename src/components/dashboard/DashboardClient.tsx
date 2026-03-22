@@ -8,6 +8,16 @@ import { createClient } from '@/lib/supabase/client'
 import Sidebar from '@/components/dashboard/Sidebar'
 import ChatArea from '@/components/dashboard/ChatArea'
 
+export interface LogEntry {
+  id: string
+  timestamp: Date
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'rag_search' | 'rag_result' | 'response' | 'save' | 'error'
+  title: string
+  detail?: string
+  data?: any
+  duration?: number
+}
+
 interface DashboardClientProps {
   userId: string
   userName: string
@@ -33,6 +43,7 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
   const [isStreaming, setIsStreaming] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState<{ id: string, text: string, status: 'active' | 'done' }[]>([])
   const [isThinking, setIsThinking] = useState(false)
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   )
@@ -158,11 +169,27 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
           break
         }
 
+        if (event.type === 'log') {
+          setLogs(prev => [{
+            ...event.log,
+            id: Date.now().toString() + Math.random().toString(36).substring(7),
+            timestamp: new Date()
+          }, ...prev])
+          continue
+        }
+
         if (event.type === 'step') {
           setThinkingSteps(prev => [
             ...prev.map(s => ({ ...s, status: 'done' as const })),
             { id: Date.now().toString(), text: event.content, status: 'active' }
           ])
+          // Auto convert text steps into thinking logs
+          setLogs(prev => [{
+            type: 'thinking',
+            title: event.content,
+            id: Date.now().toString() + Math.random().toString(36).substring(7),
+            timestamp: new Date()
+          }, ...prev])
           continue
         }
 
@@ -280,6 +307,7 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
 
   const handleNewConversation = () => {
     setActiveConversationId(null)
+    setLogs([])
     if (typeof window !== 'undefined' && window.innerWidth < 768) setSidebarOpen(false)
   }
 
@@ -334,6 +362,8 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
           onDiscardSuggestedEntry={() => setSuggestedEntry(null)}
           thinkingSteps={thinkingSteps}
           isThinking={isThinking}
+          logs={logs}
+          onClearLogs={() => setLogs([])}
         />
       </div>
     </div>

@@ -20,6 +20,7 @@ export interface StreamUsage {
 export type StreamEvent =
   | { type: 'token'; content: string }
   | { type: 'step'; content: string }
+  | { type: 'log'; log: any }
   | { type: 'done'; usage: StreamUsage }
   | { type: 'error'; error: string }
 
@@ -79,7 +80,9 @@ export async function* streamChat(
 
       try {
         const parsed = JSON.parse(data)
-        if (parsed.step) {
+        if (parsed.log) {
+          yield { type: 'log', log: parsed.log }
+        } else if (parsed.step) {
           yield { type: 'step', content: parsed.step }
         } else if (parsed.text) {
           yield { type: 'token', content: parsed.text }
