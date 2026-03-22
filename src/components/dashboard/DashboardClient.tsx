@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { IConversation, IMessage } from '@/types/chat'
 import { ChatMessage, StreamUsage, streamChat } from '@/lib/openai'
@@ -55,11 +55,20 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   )
+  // Prevents the activeConversationId effect from calling loadConversation on
+  // first mount — that is handled sequentially by the init effect below.
+  const isFirstConvEffect = useRef(true)
 
   // ─── Initial Load ──────────────────────────────────────────────────────────
+  // Run sequentially: fetch conversation list first, THEN load messages for the
+  // active conversation so that loadConversation always finds it in state.
   useEffect(() => {
-    fetchConversations()
-  }, [])
+    const init = async () => {
+      await fetchConversations()
+      if (activeConversationId) loadConversation(activeConversationId)
+    }
+    init()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchConversations = async () => {
     try {
@@ -79,8 +88,13 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
     }
   }
 
-  // Effect to load messages when conversation changes
+  // Effect to load messages when the active conversation changes.
+  // Skips the first run on mount — init() handles that sequentially.
   useEffect(() => {
+    if (isFirstConvEffect.current) {
+      isFirstConvEffect.current = false
+      return
+    }
     if (activeConversationId) {
       loadConversation(activeConversationId)
     } else {
