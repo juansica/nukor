@@ -389,6 +389,18 @@ Tu trabajo es detectar la intención del usuario en cada mensaje:
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
             }
           }
+          
+          // Emit final response log
+          controller.enqueue(encoder.encode(
+            `data: ${JSON.stringify({ 
+              log: { 
+                type: 'response', 
+                title: 'Respuesta final generada',
+                detail: fullAssistantResponse.slice(0, 100) + (fullAssistantResponse.length > 100 ? '...' : ''),
+                data: { content: fullAssistantResponse }
+              } 
+            })}\n\n`
+          ))
 
           // 3. Save messages to DB
           try {

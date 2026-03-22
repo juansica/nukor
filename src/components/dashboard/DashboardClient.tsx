@@ -136,8 +136,9 @@ export default function DashboardClient({ userId, userName, userEmail }: Dashboa
 
     const MAX_MESSAGES = 20
     const currentConv = conversations.find((c) => c.id === capturedId)
-    const allMessages = [...(currentConv?.messages ?? []), userMsg]
-    const history: ChatMessage[] = allMessages.slice(-MAX_MESSAGES).map((m) => ({ 
+    // Construct history manually including the new message to avoid stale state issues
+    const allMessagesList = [...(currentConv?.messages ?? []), userMsg]
+    const history: ChatMessage[] = allMessagesList.slice(-MAX_MESSAGES).map((m) => ({ 
       role: m.role, 
       content: m.content 
     }))
