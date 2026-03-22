@@ -271,30 +271,23 @@ function LibraryClient() {
         setUserEmail(user.email ?? '')
       }
 
-      console.log('[Library] Fetching data for workspace:', DEFAULT_WORKSPACE_ID)
+      console.log('[Library] Fetching data via API routes...')
 
       // Fetch Areas
-      const { data: aData, error: aError } = await supabase
-        .from('areas')
-        .select('*, collections(id), entries(id)')
-        .eq('workspace_id', DEFAULT_WORKSPACE_ID)
-        .order('name')
-      
-      if (aError) console.error('[Library] Areas error:', aError)
-      console.log('[Library] Areas found:', aData?.length || 0)
-      setAreas(Array.isArray(aData) ? aData : [])
+      const aRes = await fetch('/api/areas')
+      if (aRes.ok) {
+        const aData = await aRes.json()
+        console.log('[Library] Areas API data:', aData)
+        setAreas(Array.isArray(aData.areas) ? aData.areas : [])
+      }
 
       if (areaId) {
-        const { data: cData, error: cError } = await supabase
-          .from('collections')
-          .select('*, entries(id)')
-          .eq('area_id', areaId)
-          .eq('workspace_id', DEFAULT_WORKSPACE_ID)
-          .order('name')
-        
-        if (cError) console.error('[Library] Collections error:', cError)
-        console.log('[Library] Collections found:', cData?.length || 0)
-        setCollections(Array.isArray(cData) ? cData : [])
+        const cRes = await fetch(`/api/collections?areaId=${areaId}`)
+        if (cRes.ok) {
+          const cData = await cRes.json()
+          console.log('[Library] Collections API data:', cData)
+          setCollections(Array.isArray(cData.collections) ? cData.collections : [])
+        }
       }
 
       const { data: eData, error: eError } = await supabase
