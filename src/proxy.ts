@@ -21,6 +21,9 @@ export async function proxy(request: NextRequest) {
     }
   )
 
+  // This refreshes the session automatically
+  await supabase.auth.getUser()
+
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
@@ -33,5 +36,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
