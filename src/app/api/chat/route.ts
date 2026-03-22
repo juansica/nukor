@@ -8,11 +8,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-    }
+    // Get user but don't block if not found
+    const { data: { user } } = await supabase.auth.getUser()
+    const userId = user?.id || 'anonymous'
 
     const { messages, workspaceId } = await request.json()
     const effectiveWorkspaceId = workspaceId || '00000000-0000-0000-0000-000000000001'
