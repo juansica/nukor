@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Sidebar from '@/components/dashboard/Sidebar'
 import ReactMarkdown from 'react-markdown'
@@ -13,14 +13,9 @@ import {
   Trash2,
   X,
   Menu,
-  ArrowUpDown,
-  Calendar,
   ChevronRight,
-  Save,
   Grid,
   Layers,
-  ChevronLeft,
-  Filter,
   Inbox,
   FolderOpen,
   ArrowLeft,
@@ -70,7 +65,6 @@ function formatDate(iso: string) {
 
 function NewAreaModal({ onClose, onSaved, userId }: { onClose: () => void, onSaved: () => void, userId: string }) {
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [color, setColor] = useState('#6366f1')
   const [saving, setSaving] = useState(false)
   const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6']
@@ -82,7 +76,7 @@ function NewAreaModal({ onClose, onSaved, userId }: { onClose: () => void, onSav
       const res = await fetch('/api/areas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description, color, created_by: userId })
+        body: JSON.stringify({ name, color, created_by: userId })
       })
       if (!res.ok) throw new Error('Error al crear área')
       onSaved()
@@ -127,7 +121,6 @@ function NewAreaModal({ onClose, onSaved, userId }: { onClose: () => void, onSav
 
 function NewCollectionModal({ onClose, onSaved, userId, areaId }: { onClose: () => void, onSaved: () => void, userId: string, areaId: string }) {
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
@@ -137,7 +130,7 @@ function NewCollectionModal({ onClose, onSaved, userId, areaId }: { onClose: () 
       const res = await fetch('/api/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description, area_id: areaId, created_by: userId })
+        body: JSON.stringify({ name, area_id: areaId, created_by: userId })
       })
       if (!res.ok) throw new Error('Error al crear colección')
       onSaved()
@@ -167,67 +160,6 @@ function NewCollectionModal({ onClose, onSaved, userId, areaId }: { onClose: () 
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="px-5 py-2 text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm">{saving ? 'Guardando...' : 'Crear colección'}</button>
         </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Entry Detail Drawer ──────────────────────────────────────────────────────
-function EntryDetailDrawer({ entry, currentUserId, onClose, onUpdate }: { entry: Entry, currentUserId: string | null, onClose: () => void, onUpdate: (updated: Entry) => void }) {
-  const supabase = createClient()
-  const [isEditing, setIsEditing] = useState(false)
-  const [title, setTitle] = useState(entry.title)
-  const [content, setContent] = useState(entry.content)
-  const [saving, setSaving] = useState(false)
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('entries').update({ title, content }).eq('id', entry.id)
-      if (error) throw error
-      onUpdate({ ...entry, title, content })
-      setIsEditing(false)
-      toast.success('Entrada actualizada')
-    } catch (err: any) { toast.error(err.message) } finally { setSaving(false) }
-  }
-
-  const authorName = entry.created_by === currentUserId ? 'Tú' : 'Asistente'
-
-  return (
-    <div className="fixed inset-0 z-[100] flex justify-end overflow-hidden">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-white shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-300">
-        <header className="flex items-center justify-between px-6 h-16 border-b border-gray-100">
-          <div className="flex items-center gap-2 text-gray-400">
-            <BookOpen size={16} />
-            <span className="text-xs font-medium uppercase tracking-widest">Detalle de entrada</span>
-          </div>
-          <div className="flex gap-2">
-            {!isEditing && <button onClick={() => setIsEditing(true)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 flex items-center gap-2 text-sm"><Pencil size={16} /> Editar</button>}
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={20} /></button>
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto px-8 py-10">
-          {isEditing ? (
-            <div className="space-y-6">
-              <input value={title} onChange={e => setTitle(e.target.value)} className="w-full text-2xl font-bold focus:outline-none border-none bg-transparent" placeholder="Título" />
-              <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full text-base text-gray-700 min-h-[400px] focus:outline-none bg-transparent resize-none border-none" placeholder="Contenido..." />
-            </div>
-          ) : (
-            <article className="prose prose-indigo max-w-none">
-              <h1 className="text-3xl font-bold text-gray-950 mb-6">{entry.title}</h1>
-              <div className="text-gray-700 leading-relaxed"><ReactMarkdown>{entry.content}</ReactMarkdown></div>
-            </article>
-          )}
-        </main>
-        {isEditing && (
-          <footer className="border-t border-gray-100 p-6 flex justify-end gap-3 bg-gray-50/50">
-            <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-200 rounded-lg">Cancelar</button>
-            <button onClick={handleSave} disabled={saving} className="px-6 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg shadow-md flex items-center gap-2">
-              <Save size={16} /> {saving ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </footer>
-        )}
       </div>
     </div>
   )
@@ -266,13 +198,18 @@ function LibraryClient() {
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
 
-  // Modals state
+  // Modals / dropdowns
   const [showAreaModal, setShowAreaModal] = useState(false)
   const [showCollModal, setShowCollModal] = useState(false)
-  const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Entry | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
+
+  // Inline document editing state
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 350)
@@ -301,18 +238,13 @@ function LibraryClient() {
         }
       }
 
-      console.log('[Library] Fetching data via API routes...')
-
-      // Fetch Areas
       const aRes = await fetch('/api/areas')
       if (aRes.ok) {
         const aData = await aRes.json()
-        console.log('[Library] Areas API data:', aData)
         setAreas(Array.isArray(aData.areas) ? aData.areas : [])
       }
 
       if (!areaId) {
-        // Fetch all collections on the main page so we can compute per-area counts
         const cRes = await fetch('/api/collections')
         if (cRes.ok) {
           const cData = await cRes.json()
@@ -322,7 +254,6 @@ function LibraryClient() {
         const cRes = await fetch(`/api/collections?areaId=${areaId}`)
         if (cRes.ok) {
           const cData = await cRes.json()
-          console.log('[Library] Collections API data:', cData)
           setCollections(Array.isArray(cData.collections) ? cData.collections : [])
         }
       }
@@ -335,7 +266,6 @@ function LibraryClient() {
         .order('created_at', { ascending: false })
 
       if (eError) console.error('[Library] Entries error:', eError)
-      console.log('[Library] Entries found:', eData?.length || 0)
       setEntries(Array.isArray(eData) ? eData as any : [])
     } catch (err: any) {
       console.error('[Library] Error in fetchData:', err)
@@ -397,6 +327,7 @@ function LibraryClient() {
     if (file) handleFileUpload(file)
   }
 
+  // Used for the non-collection list view delete
   const handleDelete = async () => {
     if (!deleteTarget) return
     const { error } = await supabase.from('entries').delete().eq('id', deleteTarget.id)
@@ -420,6 +351,35 @@ function LibraryClient() {
     }
   }
 
+  // Inline document view handlers
+  const handleEditEntry = (entry: Entry) => {
+    setEditingEntryId(entry.id)
+    setEditTitle(entry.title)
+    setEditContent(entry.content)
+  }
+
+  const handleSaveEdit = async (entryId: string) => {
+    const { error } = await supabase
+      .from('entries')
+      .update({ title: editTitle, content: editContent, updated_at: new Date().toISOString() })
+      .eq('id', entryId)
+    if (error) { toast.error('Error al guardar'); return }
+    setEditingEntryId(null)
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, title: editTitle, content: editContent } : e))
+    toast.success('Sección actualizada')
+  }
+
+  const confirmDelete = async (entryId: string) => {
+    const { error } = await supabase.from('entries').delete().eq('id', entryId)
+    if (!error) {
+      setEntries(prev => prev.filter(e => e.id !== entryId))
+      toast.success('Sección eliminada')
+    } else {
+      toast.error('Error al eliminar')
+    }
+    setConfirmDeleteId(null)
+  }
+
   return (
     <div className="h-screen flex overflow-hidden bg-[#F1F3F6]">
       <aside className={`fixed md:relative inset-y-0 left-0 z-50 w-64 h-full bg-white border-r border-gray-200 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
@@ -436,8 +396,8 @@ function LibraryClient() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button 
-              onClick={fetchData} 
+            <button
+              onClick={fetchData}
               className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
               title="Refrescar datos"
             >
@@ -508,9 +468,6 @@ function LibraryClient() {
                     </Link>
                   </motion.div>
                 ))}
-                {/* ONBOARDING NOTE: Explain to new users that entries saved without
-                    creating areas first will appear in "Sin clasificar". They can
-                    create areas at any time and assign entries to them. */}
                 <Link href={`/dashboard/library?area=unclassified`} className="group bg-white p-6 rounded-2xl border-l-[6px] border border-gray-200 hover:shadow-xl transition-all relative overflow-hidden" style={{ borderLeftColor: '#9ca3af' }}>
                   <div className="flex items-start mb-4">
                     <div className="p-2 rounded-xl bg-gray-50 text-gray-400 group-hover:bg-gray-100 transition-colors"><Inbox size={24} /></div>
@@ -555,6 +512,7 @@ function LibraryClient() {
               </>
             )}
 
+            {/* ── Collection detail: file upload zone ── */}
             {collectionId && (
               <div
                 className={`mb-4 border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer ${isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'}`}
@@ -578,7 +536,152 @@ function LibraryClient() {
               </div>
             )}
 
-            {(collectionId || debouncedQuery || areaId === 'unclassified') && (
+            {/* ── Collection detail: unified document view ── */}
+            {collectionId && (
+              <div className="max-w-3xl mx-auto">
+                {/* Document header */}
+                {currentCollection && (
+                  <div className="mb-8">
+                    <h1 className="text-2xl font-bold text-gray-900">{currentCollection.name}</h1>
+                    {currentCollection.description && (
+                      <p className="text-gray-500 mt-1">{currentCollection.description}</p>
+                    )}
+                    <div className="flex items-center gap-4 mt-3 text-sm text-gray-400">
+                      <span>{filteredEntries.length} secciones</span>
+                      <span>Última actualización: {formatDate(currentCollection.updated_at)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Document body */}
+                <div className="space-y-0">
+                  {filteredEntries.length === 0 ? (
+                    <div className="text-center py-16 text-gray-400">
+                      <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                      <p className="font-medium">Esta colección está vacía</p>
+                      <p className="text-sm mt-1">
+                        Ve al chat y cuando Nukor detecte conocimiento nuevo,<br />
+                        podrás guardarlo directamente aquí.
+                      </p>
+                      <button
+                        onClick={() => router.push('/dashboard')}
+                        className="mt-4 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                      >
+                        Ir al chat →
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {filteredEntries.map((entry, index) => (
+                        <motion.div
+                          key={entry.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="group relative"
+                        >
+                          {index > 0 && <div className="border-t border-gray-100 my-1" />}
+
+                          <div className="relative py-4 px-2 rounded-lg hover:bg-gray-50 transition-colors">
+                            {editingEntryId === entry.id ? (
+                              <div className="space-y-2 pr-10">
+                                <input
+                                  value={editTitle}
+                                  onChange={e => setEditTitle(e.target.value)}
+                                  className="w-full font-semibold text-gray-800 border-b border-indigo-300 focus:outline-none bg-transparent pb-1"
+                                />
+                                <textarea
+                                  value={editContent}
+                                  onChange={e => setEditContent(e.target.value)}
+                                  className="w-full text-gray-600 text-sm leading-relaxed focus:outline-none bg-transparent resize-none border-none"
+                                  rows={6}
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleSaveEdit(entry.id)}
+                                    className="text-xs text-white bg-indigo-600 px-3 py-1 rounded-md hover:bg-indigo-700"
+                                  >
+                                    Guardar
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingEntryId(null)}
+                                    className="text-xs text-gray-500 px-3 py-1 rounded-md hover:bg-gray-100"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pr-10">
+                                <h3 className="font-semibold text-gray-800 mb-1">{entry.title}</h3>
+                                <div className="text-gray-600 text-sm leading-relaxed prose prose-sm max-w-none">
+                                  <ReactMarkdown>{entry.content}</ReactMarkdown>
+                                </div>
+                                <div className="flex items-center gap-3 mt-2">
+                                  <span className="text-xs text-gray-400">
+                                    {entry.created_by === currentUserId ? 'Tú' : 'Asistente'} · {formatDate(entry.created_at)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Inline action buttons — visible on hover */}
+                            {editingEntryId !== entry.id && (
+                              <div className="absolute right-2 top-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                {confirmDeleteId === entry.id ? (
+                                  <div className="flex items-center gap-1 bg-white border border-red-100 rounded-lg shadow-sm px-2 py-1">
+                                    <span className="text-xs text-red-600">¿Eliminar?</span>
+                                    <button
+                                      onClick={() => confirmDelete(entry.id)}
+                                      className="text-xs text-red-600 font-medium hover:text-red-700 px-1"
+                                    >
+                                      Sí
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDeleteId(null)}
+                                      className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleEditEntry(entry)}
+                                      className="p-1.5 rounded-md hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+                                      title="Editar"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDeleteId(entry.id)}
+                                      className="p-1.5 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                                      title="Eliminar sección"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
+
+                      <button
+                        onClick={() => router.push('/dashboard')}
+                        className="mt-4 flex items-center gap-2 text-sm text-gray-400 hover:text-indigo-600 transition-colors py-2 px-2 rounded-lg hover:bg-indigo-50 w-full"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Agregar sección
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Non-collection list view (search / unclassified) ── */}
+            {!collectionId && (debouncedQuery || areaId === 'unclassified') && (
               <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden divide-y divide-gray-100">
                 {filteredEntries.length === 0 ? (
                   debouncedQuery ? (
@@ -586,13 +689,6 @@ function LibraryClient() {
                       <Search size={40} className="text-gray-200 mb-4" />
                       <p className="text-lg font-bold text-gray-950 mb-2">No se encontraron resultados</p>
                       <p className="text-sm font-medium text-gray-500">Intenta con otros términos.</p>
-                    </div>
-                  ) : collectionId ? (
-                    <div className="p-20 text-center flex flex-col items-center">
-                      <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 mb-4"><BookOpen size={32} /></div>
-                      <p className="text-lg font-bold text-gray-950 mb-2">Esta colección está vacía</p>
-                      <p className="text-sm font-medium text-gray-500 mb-6 max-w-md">Ve al chat y cuando Nukor detecte conocimiento nuevo,<br/>podrás guardarlo directamente aquí.</p>
-                      <Link href="/dashboard" className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors">Ir al chat</Link>
                     </div>
                   ) : (
                     <div className="p-20 text-center flex flex-col items-center">
@@ -602,16 +698,14 @@ function LibraryClient() {
                     </div>
                   )
                 ) : filteredEntries.map(entry => (
-                  <div key={entry.id} onClick={() => setSelectedEntry(entry)} className="group flex items-start gap-4 px-6 py-5 hover:bg-gray-50 transition-all cursor-pointer">
+                  <div key={entry.id} className="group flex items-start gap-4 px-6 py-5 hover:bg-gray-50 transition-all cursor-pointer">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-colors"><BookOpen size={18} /></div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="text-sm font-bold text-gray-950 truncate">{entry.title}</h3>
-                        {!collectionId && (
-                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                             {areas.find(a => a.id === entry.area_id)?.name || 'Sin área'}
-                           </span>
-                        )}
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          {areas.find(a => a.id === entry.area_id)?.name || 'Sin área'}
+                        </span>
                       </div>
                       <p className="text-sm text-gray-500 line-clamp-1 mb-2 font-medium">{entry.content.slice(0, 100)}...</p>
                       <div className="flex items-center gap-3 text-[11px] font-bold text-gray-400">
@@ -651,7 +745,6 @@ function LibraryClient() {
 
       {showAreaModal && <NewAreaModal onClose={() => setShowAreaModal(false)} onSaved={fetchData} userId={currentUserId || ''} />}
       {showCollModal && <NewCollectionModal onClose={() => setShowCollModal(false)} onSaved={fetchData} userId={currentUserId || ''} areaId={areaId || ''} />}
-      {selectedEntry && <EntryDetailDrawer entry={selectedEntry} currentUserId={currentUserId} onClose={() => setSelectedEntry(null)} onUpdate={e => setEntries(prev => prev.map(x => x.id === e.id ? e : x))} />}
 
       {deleteTarget && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
