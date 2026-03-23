@@ -431,7 +431,7 @@ function LibraryClient() {
           <div className="max-w-5xl mx-auto">
             {/* Tab bar — only at root level */}
             {!areaId && !collectionId && (
-              <div className="flex items-center gap-1 mb-6 bg-white border border-gray-200 rounded-xl p-1 w-fit shadow-sm">
+              <div className="flex items-center gap-1 mb-6 bg-white border border-gray-200 rounded-xl p-1 w-fit shadow-sm mx-auto">
                 {(['entries', 'connections', 'files'] as const).map(tab => (
                   <button
                     key={tab}

@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { IConversation } from '@/types/chat'
 import SignOutButton from '@/components/auth/SignOutButton'
-import { createClient } from '@/lib/supabase/client'
 import { Plus, BookOpen, MessageSquare, Settings, ChevronDown, X, Check, LayoutDashboard } from 'lucide-react'
 
 interface SidebarProps {
@@ -40,16 +39,6 @@ const Sidebar = ({
   const workspaceRef = useRef<HTMLDivElement>(null)
 
   const [conversations, setConversations] = useState<IConversation[]>(initialConversations ?? [])
-  const [systemRole, setSystemRole] = useState<string | null>(null)
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from('profiles').select('system_role').eq('id', user.id).maybeSingle()
-        .then(({ data }) => setSystemRole(data?.system_role ?? null))
-    })
-  }, [])
 
   const refreshConversations = async () => {
     try {
@@ -180,20 +169,18 @@ const Sidebar = ({
       {/* Nav — PRINCIPAL */}
       <nav className="px-3 pb-2 flex-shrink-0">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1.5">Principal</p>
-        {systemRole === 'super_admin' && (
-          <Link
-            href="/dashboard/overview"
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
-              isOverviewActive
-                ? 'bg-indigo-50 text-indigo-600'
-                : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
-            }`}
-            onClick={onClose}
-          >
-            <LayoutDashboard size={18} className={isOverviewActive ? 'text-indigo-600' : 'text-gray-400'} />
-            Dashboard
-          </Link>
-        )}
+        <Link
+          href="/dashboard/overview"
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
+            isOverviewActive
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+          }`}
+          onClick={onClose}
+        >
+          <LayoutDashboard size={18} className={isOverviewActive ? 'text-indigo-600' : 'text-gray-400'} />
+          Dashboard
+        </Link>
         <Link
           href="/dashboard"
           className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
