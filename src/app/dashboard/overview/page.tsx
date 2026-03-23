@@ -16,20 +16,22 @@ export default async function OverviewPage() {
 
   if (!user) redirect('/sign-in')
 
-  let profile: { full_name: string | null; last_workspace_id: string | null; system_role: string | null } | null = null
-
-  try {
-    const { data } = await supabaseAdmin
-      .from('profiles')
-      .select('full_name, last_workspace_id, system_role')
-      .eq('id', user.id)
-      .maybeSingle()
-    profile = data
-  } catch {
-    // system_role column may not exist yet — treat as no access
-  }
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name, last_workspace_id')
+    .eq('id', user.id)
+    .maybeSingle()
 
   if (!profile?.last_workspace_id) redirect('/onboarding')
+
+  // system_role column may not exist yet — fetch separately and ignore errors
+  let systemRole: string | null = null
+  const { data: roleData, error: roleError } = await supabaseAdmin
+    .from('profiles')
+    .select('system_role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (!roleError) systemRole = roleData?.system_role ?? null
 
   const userName =
     profile.full_name ||
@@ -53,7 +55,7 @@ export default async function OverviewPage() {
       userEmail={user.email ?? ''}
       workspaceName={workspaceName}
       workspaceId={profile.last_workspace_id}
-      systemRole={profile.system_role ?? null}
+      systemRole={systemRole}
     />
   )
 }
