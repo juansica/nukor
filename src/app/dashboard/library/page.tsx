@@ -223,15 +223,34 @@ function LibraryClient() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   const selectAll = () => setSelectedIds(new Set(collections.map(c => c.id)))
   const clearSelection = () => { setSelectedIds(new Set()); setSelectionMode(false) }
 
+  const executeBulkDelete = async () => {
+    setShowBulkDeleteConfirm(false)
+    setBulkLoading(true)
+    try {
+      const res = await fetch('/api/collections/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', ids: Array.from(selectedIds) }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Error al eliminar'); return }
+      setCollections(prev => prev.filter(c => !selectedIds.has(c.id)))
+      toast.success(`${selectedIds.size} colección(es) eliminada(s)`)
+      clearSelection()
+    } catch { toast.error('Error de red') }
+    finally { setBulkLoading(false) }
+  }
+
   const handleBulkAction = async (action: 'enable' | 'disable' | 'delete') => {
     if (selectedIds.size === 0) return
-    if (action === 'delete' && !confirm(`¿Eliminar ${selectedIds.size} colección(es) y todas sus entradas? Esta acción no se puede deshacer.`)) return
+    if (action === 'delete') { setShowBulkDeleteConfirm(true); return }
     setBulkLoading(true)
     try {
       const res = await fetch('/api/collections/bulk', {
@@ -241,13 +260,8 @@ function LibraryClient() {
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Error al ejecutar la acción'); return }
-      if (action === 'delete') {
-        setCollections(prev => prev.filter(c => !selectedIds.has(c.id)))
-        toast.success(`${selectedIds.size} colección(es) eliminada(s)`)
-      } else {
-        setCollections(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, enabled: action === 'enable' } : c))
-        toast.success(action === 'disable' ? `${selectedIds.size} colección(es) desactivada(s) del asistente` : `${selectedIds.size} colección(es) activada(s)`)
-      }
+      setCollections(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, enabled: action === 'enable' } : c))
+      toast.success(action === 'disable' ? `${selectedIds.size} colección(es) desactivada(s) del asistente` : `${selectedIds.size} colección(es) activada(s)`)
       clearSelection()
     } catch { toast.error('Error de red') }
     finally { setBulkLoading(false) }
@@ -983,6 +997,21 @@ function LibraryClient() {
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
               <button onClick={handleDelete} className="px-6 py-2 text-sm font-bold bg-red-600 text-white rounded-lg hover:bg-red-700">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+            <h2 className="text-lg font-bold mb-2 text-gray-950">¿Eliminar {selectedIds.size} colección{selectedIds.size !== 1 ? 'es' : ''}?</h2>
+            <p className="text-sm text-gray-500 mb-6 font-medium">Se eliminarán también todas las entradas dentro de estas colecciones. Esta acción no se puede deshacer.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowBulkDeleteConfirm(false)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+              <button onClick={executeBulkDelete} disabled={bulkLoading} className="px-6 py-2 text-sm font-bold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {bulkLoading ? 'Eliminando...' : 'Eliminar'}
+              </button>
             </div>
           </div>
         </div>
