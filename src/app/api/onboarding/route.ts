@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     // Add creator as admin member
     const { error: memberError } = await supabaseAdmin
       .from('workspace_members')
-      .insert({ workspace_id: workspace.id, user_id: user.id, role: 'admin' })
+      .insert({ id: crypto.randomUUID(), workspace_id: workspace.id, user_id: user.id, role: 'admin' })
 
     if (memberError) return new Response(JSON.stringify({ error: memberError.message }), { status: 500 })
 
