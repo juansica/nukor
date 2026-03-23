@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Send, Menu, Sparkles, BookmarkPlus, Check, X, ArrowUp, Activity } from 'lucide-react'
+import { Plus, Send, Menu, Sparkles, BookmarkPlus, Check, X, ArrowUp, Activity, FileText, FileSpreadsheet, File } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import type { LogEntry, LogGroup } from '@/components/dashboard/DashboardClient'
 
@@ -53,6 +53,8 @@ interface ChatAreaProps {
   isThinking?: boolean
   logGroups?: LogGroup[]
   onClearLogs?: () => void
+  onFileUpload?: (file: File) => Promise<void>
+  isFileUploading?: boolean
 }
 
 const parseMessageContent = (content: string) => {
@@ -205,6 +207,8 @@ const ChatArea = ({
   isThinking = false,
   logGroups = [],
   onClearLogs,
+  onFileUpload,
+  isFileUploading = false,
 }: ChatAreaProps) => {
   const supabase = createClient()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -212,28 +216,6 @@ const ChatArea = ({
   const [entryTitle, setEntryTitle] = useState('')
   const [entryContent, setEntryContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-
-  const [isUploading, setIsUploading] = useState(false)
-
-  const handleFileUpload = async (file: File) => {
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('workspace_id', workspaceId)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      if (!res.ok) {
-        const data = await res.json()
-        toast.error(data.error || 'Error al subir el archivo')
-      } else {
-        toast.success(`"${file.name}" subido correctamente`)
-      }
-    } catch {
-      toast.error('Error al subir el archivo')
-    } finally {
-      setIsUploading(false)
-    }
-  }
 
   const [logsOpen, setLogsOpen] = useState(false)
   const [hasNewLogs, setHasNewLogs] = useState(false)
@@ -411,43 +393,70 @@ const ChatArea = ({
                         isUser ? 'items-end' : 'items-start'
                       }`}
                     >
-                      <div
-                        className={`
-                          px-5 py-3.5 rounded-2xl text-sm leading-relaxed max-w-full
-                          ${
-                            isUser
-                              ? 'bg-indigo-600 text-white font-medium border border-indigo-500 shadow-sm'
-                              : 'bg-white text-gray-900 border border-border-default shadow-sm'
-                          }
-                        `}
-                      >
-                        {isUser ? (
-                          msg.content
-                        ) : (
-                          <div className="prose prose-sm max-w-none text-gray-700 prose-p:leading-relaxed prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-100 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
-                            <ReactMarkdown>
-                              {parseMessageContent(msg.content).mainContent}
-                            </ReactMarkdown>
+                      {isUser && msg.content.startsWith('__FILE__') ? (() => {
+                        const parts = msg.content.split('__').filter(Boolean)
+                        // parts: ['FILE', name, type, size]
+                        const [, name, mime, sizeStr] = parts
+                        const size = parseInt(sizeStr || '0', 10)
+                        const sizeLabel = size > 1024 * 1024
+                          ? `${(size / 1024 / 1024).toFixed(1)} MB`
+                          : `${Math.round(size / 1024)} KB`
+                        const isExcel = mime?.includes('spreadsheet') || mime?.includes('excel')
+                        const isWord = mime?.includes('word') || mime?.includes('msword')
+                        const Icon = isExcel ? FileSpreadsheet : isWord ? FileText : File
+                        const iconColor = isExcel ? 'text-green-600' : isWord ? 'text-blue-600' : 'text-red-600'
+                        return (
+                          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white border border-gray-200 shadow-sm max-w-[280px]">
+                            <div className={`flex-shrink-0 ${iconColor}`}>
+                              <Icon size={24} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
+                              <p className="text-xs text-gray-500">{sizeLabel}</p>
+                            </div>
                           </div>
-                        )}
-                        {showCursor && (
-                          <span className="inline-block w-[2px] h-[1em] ml-0.5 align-middle animate-pulse bg-indigo-600" />
-                        )}
-                      </div>
+                        )
+                      })() : (
+                        <>
+                          <div
+                            className={`
+                              px-5 py-3.5 rounded-2xl text-sm leading-relaxed max-w-full
+                              ${
+                                isUser
+                                  ? 'bg-indigo-600 text-white font-medium border border-indigo-500 shadow-sm'
+                                  : 'bg-white text-gray-900 border border-border-default shadow-sm'
+                              }
+                            `}
+                          >
+                            {isUser ? (
+                              msg.content
+                            ) : (
+                              <div className="prose prose-sm max-w-none text-gray-700 prose-p:leading-relaxed prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-100 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
+                                <ReactMarkdown>
+                                  {parseMessageContent(msg.content).mainContent}
+                                </ReactMarkdown>
+                              </div>
+                            )}
+                            {showCursor && (
+                              <span className="inline-block w-[2px] h-[1em] ml-0.5 align-middle animate-pulse bg-indigo-600" />
+                            )}
+                          </div>
 
-                      {msg.role === 'assistant' &&
-                        parseMessageContent(msg.content).sources.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2 ml-1">
-                            {parseMessageContent(msg.content).sources.map((source, i) => (
-                              <span
-                                key={i}
-                                className="text-xs font-medium tracking-tight px-3 py-1 rounded-md bg-background-tertiary text-text-muted border border-border-default shadow-sm"
-                              >
-                                {source}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                          {msg.role === 'assistant' &&
+                            parseMessageContent(msg.content).sources.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2 ml-1">
+                                {parseMessageContent(msg.content).sources.map((source, i) => (
+                                  <span
+                                    key={i}
+                                    className="text-xs font-medium tracking-tight px-3 py-1 rounded-md bg-background-tertiary text-text-muted border border-border-default shadow-sm"
+                                  >
+                                    {source}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -500,8 +509,8 @@ const ChatArea = ({
       <ChatInput
         onSend={onSendMessage}
         disabled={isTyping || isStreaming}
-        onFileSelect={handleFileUpload}
-        isUploading={isUploading}
+        onFileSelect={onFileUpload}
+        isUploading={isFileUploading}
       />
 
         {/* Save Entry Modal */}

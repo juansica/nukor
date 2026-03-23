@@ -15,6 +15,7 @@ export async function uploadDocument(
     file: { content: blob, fileName: filename },
     metadata,
     mode: 'fast',
+    partition: `workspace-${metadata.workspace_id}`,
   })
   return document
 }
@@ -24,7 +25,7 @@ export async function searchRagie(query: string, workspaceId: string, topK = 5) 
     const results = await ragie.retrievals.retrieve({
       query,
       topK,
-      filter: { scope: 'partition', partition: workspaceId },
+      partition: `workspace-${workspaceId}`,
     })
     return results.scoredChunks ?? []
   } catch {
