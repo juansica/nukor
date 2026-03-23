@@ -25,6 +25,7 @@ import {
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
+import IntegrationsTab from '@/components/settings/IntegrationsTab'
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -198,6 +199,11 @@ function LibraryClient() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [libraryTab, setLibraryTab] = useState<'entries' | 'connections' | 'files'>('entries')
+
+  // Files tab state
+  const [files, setFiles] = useState<any[]>([])
+  const [filesLoading, setFilesLoading] = useState(false)
 
   // Modals / dropdowns
   const [showAreaModal, setShowAreaModal] = useState(false)
@@ -224,46 +230,59 @@ function LibraryClient() {
     return () => window.removeEventListener('click', handleClick)
   }, [])
 
+  useEffect(() => {
+    if (libraryTab === 'files' && workspaceId) {
+      setFilesLoading(true)
+      fetch('/api/documents')
+        .then(r => r.ok ? r.json() : { documents: [] })
+        .then(data => setFiles(data.documents ?? []))
+        .catch(() => setFiles([]))
+        .finally(() => setFilesLoading(false))
+    }
+  }, [libraryTab, workspaceId])
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
       let wsId = DEFAULT_WORKSPACE_ID
-      const { data: { user } } = await supabase.auth.getUser()
+
+      // Stage 1: fire auth + API calls simultaneously
+      const [{ data: { user } }, areasRes, collectionsRes] = await Promise.all([
+        supabase.auth.getUser(),
+        fetch('/api/areas'),
+        fetch('/api/collections'),
+      ])
+
       if (user) {
         setCurrentUserId(user.id)
         setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario')
         setUserEmail(user.email ?? '')
-        const { data: profile } = await supabase.from('profiles').select('last_workspace_id').eq('id', user.id).maybeSingle()
+
+        // Stage 2: profile + parse API responses simultaneously
+        const [{ data: profile }, areasData, collectionsData] = await Promise.all([
+          supabase.from('profiles').select('last_workspace_id').eq('id', user.id).maybeSingle(),
+          areasRes.ok ? areasRes.json() : Promise.resolve({}),
+          collectionsRes.ok ? collectionsRes.json() : Promise.resolve({}),
+        ])
+
+        setAreas(Array.isArray(areasData.areas) ? areasData.areas : [])
+        setCollections(Array.isArray(collectionsData.collections) ? collectionsData.collections : [])
+
         if (profile?.last_workspace_id) {
           wsId = profile.last_workspace_id
           setWorkspaceId(wsId)
-          const { data: ws } = await supabase.from('workspaces').select('name').eq('id', wsId).maybeSingle()
-          if (ws?.name) setWorkspaceName(ws.name)
         }
+
+        // Stage 3: workspace name + entries simultaneously
+        const [wsResult, entriesResult] = await Promise.all([
+          supabase.from('workspaces').select('name').eq('id', wsId).maybeSingle(),
+          supabase.from('entries').select('*').eq('workspace_id', wsId).is('deleted_at', null).order('created_at', { ascending: false }),
+        ])
+
+        if (wsResult.data?.name) setWorkspaceName(wsResult.data.name)
+        if (entriesResult.error) console.error('[Library] Entries error:', entriesResult.error)
+        setEntries(Array.isArray(entriesResult.data) ? entriesResult.data as any : [])
       }
-
-      const aRes = await fetch('/api/areas')
-      if (aRes.ok) {
-        const aData = await aRes.json()
-        setAreas(Array.isArray(aData.areas) ? aData.areas : [])
-      }
-
-      // Always fetch all collections so area card counts are accurate
-      const cRes = await fetch('/api/collections')
-      if (cRes.ok) {
-        const cData = await cRes.json()
-        setCollections(Array.isArray(cData.collections) ? cData.collections : [])
-      }
-
-      const { data: eData, error: eError } = await supabase
-        .from('entries')
-        .select('*')
-        .eq('workspace_id', wsId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-
-      if (eError) console.error('[Library] Entries error:', eError)
-      setEntries(Array.isArray(eData) ? eData as any : [])
     } catch (err: any) {
       console.error('[Library] Error in fetchData:', err)
       toast.error('Error al cargar datos. Por favor, recarga la página.')
@@ -387,10 +406,12 @@ function LibraryClient() {
         <header className="flex-shrink-0 h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1">
             <button className="md:hidden p-2 text-gray-400" onClick={() => setSidebarOpen(true)}><Menu size={20}/></button>
-            <div className="relative max-w-md w-full">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Buscar en biblioteca..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 rounded-xl bg-gray-50 border-none text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-medium" />
-            </div>
+            {(areaId || collectionId || libraryTab === 'entries') && (
+              <div className="relative max-w-md w-full">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="text" placeholder="Buscar en biblioteca..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 rounded-xl bg-gray-50 border-none text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-medium" />
+              </div>
+            )}
           </div>
           <div className="flex gap-3">
             <button
@@ -400,7 +421,7 @@ function LibraryClient() {
             >
               <RotateCcw size={20} className={loading ? 'animate-spin' : ''} />
             </button>
-            {!areaId && <button onClick={() => setShowAreaModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva área</button>}
+            {!areaId && libraryTab === 'entries' && <button onClick={() => setShowAreaModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva área</button>}
             {areaId && !collectionId && <button onClick={() => setShowCollModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva colección</button>}
             {collectionId && <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva entrada</Link>}
           </div>
@@ -408,6 +429,23 @@ function LibraryClient() {
 
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-5xl mx-auto">
+            {/* Tab bar — only at root level */}
+            {!areaId && !collectionId && (
+              <div className="flex items-center gap-1 mb-6 bg-white border border-gray-200 rounded-xl p-1 w-fit shadow-sm">
+                {(['entries', 'connections', 'files'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setLibraryTab(tab)}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
+                      libraryTab === tab ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                  >
+                    {tab === 'entries' ? 'Entradas' : tab === 'connections' ? 'Conexiones' : 'Archivos'}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Breadcrumbs */}
             <div className="flex items-center gap-3 mb-6">
               {areaId && (
@@ -442,7 +480,7 @@ function LibraryClient() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[1,2,3].map(i => <div key={i} className="h-48 bg-white/50 animate-pulse rounded-2xl border border-gray-100" />)}
               </div>
-            ) : !areaId && (
+            ) : !areaId && libraryTab === 'entries' && (
               <>
                 <div className="mb-6 px-1">
                   <p className="text-sm font-medium text-gray-500">
@@ -483,6 +521,44 @@ function LibraryClient() {
                 </Link>
               </motion.div>
               </>
+            )}
+
+            {/* Connections tab */}
+            {!areaId && !collectionId && libraryTab === 'connections' && workspaceId && (
+              <IntegrationsTab workspaceId={workspaceId} redirectTo="/dashboard/library" />
+            )}
+
+            {/* Files tab */}
+            {!areaId && !collectionId && libraryTab === 'files' && (
+              filesLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[1,2,3,4].map(i => <div key={i} className="h-20 bg-white/50 animate-pulse rounded-2xl border border-gray-100" />)}
+                </div>
+              ) : files.length === 0 ? (
+                <div className="py-24 flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-300 mb-4 text-3xl">📄</div>
+                  <p className="text-lg font-bold text-gray-900 mb-1">No hay archivos aún</p>
+                  <p className="text-sm text-gray-500">Sube archivos desde una colección o conecta una fuente de datos.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {files.map((file: any) => (
+                    <div key={file.id} className="flex items-center gap-4 bg-white border border-gray-200 rounded-xl px-5 py-3.5 hover:border-indigo-200 hover:shadow-sm transition-all">
+                      <span className="text-2xl">📄</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-950 truncate">{file.name || file.id}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {file.status && <span className="capitalize mr-2">{file.status}</span>}
+                          {file.created_at && new Date(file.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      {file.metadata?.source_url && (
+                        <a href={file.metadata.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-500 hover:underline font-medium">Ver fuente</a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
             {areaId && !collectionId && areaId !== 'unclassified' && (

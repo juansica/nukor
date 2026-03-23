@@ -470,6 +470,7 @@ export default function DashboardClient({ userId, userName, userEmail, workspace
           userEmail={userEmail}
           workspaceName={workspaceName}
           onClose={() => setSidebarOpen(false)}
+          initialConversations={conversations}
         />
       </aside>
 

@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { CheckCircle2, RefreshCcw, Unplug, Plug } from 'lucide-react'
+import { CheckCircle2, RefreshCcw, Unplug, Plug, RotateCcw } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
 function ConnectedToast({ onConnected, redirectTo }: { onConnected: () => void; redirectTo: string }) {
@@ -52,6 +51,7 @@ export default function IntegrationsTab({ workspaceId, redirectTo = '/dashboard/
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState<string | null>(null)
 
   const fetchConnections = useCallback(async () => {
     setLoading(true)
@@ -107,6 +107,23 @@ export default function IntegrationsTab({ workspaceId, redirectTo = '/dashboard/
     }
   }
 
+  const handleSync = async (connectionId: string) => {
+    setSyncing(connectionId)
+    try {
+      const res = await fetch('/api/integrations/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionId }),
+      })
+      if (!res.ok) throw new Error('Failed to sync')
+      toast.success('Sincronización iniciada — puede tardar unos minutos')
+    } catch {
+      toast.error('Error al sincronizar. Inténtalo de nuevo.')
+    } finally {
+      setSyncing(null)
+    }
+  }
+
   const getConnectorMeta = (type: string) =>
     CONNECTORS.find(c => c.id === type) ?? { id: type, label: type, emoji: '🔌', description: '' }
 
@@ -140,6 +157,7 @@ export default function IntegrationsTab({ workspaceId, redirectTo = '/dashboard/
             {connections.map(conn => {
               const meta = getConnectorMeta(conn.type)
               const isDisconnecting = disconnecting === conn.id
+              const isSyncing = syncing === conn.id || conn.syncing
               return (
                 <div key={conn.id} className="flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-xl px-5 py-4">
                   <span className="text-2xl">{meta.emoji}</span>
@@ -150,7 +168,7 @@ export default function IntegrationsTab({ workspaceId, redirectTo = '/dashboard/
                         <CheckCircle2 size={12} />
                         Conectado
                       </span>
-                      {conn.syncing && (
+                      {isSyncing && (
                         <span className="flex items-center gap-1 text-xs text-indigo-500 font-medium">
                           <RefreshCcw size={12} className="animate-spin" />
                           Sincronizando
@@ -159,14 +177,25 @@ export default function IntegrationsTab({ workspaceId, redirectTo = '/dashboard/
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">Última sincronización: {formatLastSync(conn.lastSyncedAt)}</p>
                   </div>
-                  <button
-                    onClick={() => handleDisconnect(conn.id)}
-                    disabled={isDisconnecting}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    <Unplug size={13} />
-                    {isDisconnecting ? 'Desconectando...' : 'Desconectar'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleSync(conn.id)}
+                      disabled={!!isSyncing || isDisconnecting}
+                      title="Sincronizar ahora"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-40"
+                    >
+                      <RotateCcw size={13} className={syncing === conn.id ? 'animate-spin' : ''} />
+                      {syncing === conn.id ? 'Sincronizando...' : 'Sincronizar'}
+                    </button>
+                    <button
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={isDisconnecting || !!syncing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+                    >
+                      <Unplug size={13} />
+                      {isDisconnecting ? 'Desconectando...' : 'Desconectar'}
+                    </button>
+                  </div>
                 </div>
               )
             })}
