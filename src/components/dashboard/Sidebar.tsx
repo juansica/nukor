@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { IConversation } from '@/types/chat'
 import SignOutButton from '@/components/auth/SignOutButton'
-import { Plus, Clock, BookOpen, Layers, ChevronDown, X, Check } from 'lucide-react'
+import { Plus, BookOpen, Layers, ChevronDown, X, Check, Plug } from 'lucide-react'
 
 interface SidebarProps {
   activeConversationId: string | null
@@ -20,6 +20,7 @@ interface SidebarProps {
 const navItems = [
   { label: 'Base de conocimientos', Icon: BookOpen, path: '/dashboard/library' },
   { label: 'Áreas', Icon: Layers, path: '/dashboard/areas' },
+  { label: 'Integraciones', Icon: Plug, path: '/dashboard/settings/integrations' },
 ]
 
 const Sidebar = ({
