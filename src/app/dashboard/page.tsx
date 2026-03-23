@@ -1,9 +1,14 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { prisma } from '@/lib/prisma'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import DashboardClient from '@/components/dashboard/DashboardClient'
 
 export const dynamic = 'force-dynamic'
+
+const supabaseAdmin = createAdmin(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -13,7 +18,12 @@ export default async function DashboardPage() {
     redirect('/sign-in')
   }
 
-  const profile = await prisma.profile.findUnique({ where: { id: user.id } })
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name, last_workspace_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
   if (!profile?.last_workspace_id) {
     redirect('/onboarding')
   }
