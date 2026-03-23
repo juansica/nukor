@@ -227,7 +227,11 @@ function LibraryClient() {
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
-  const selectAll = () => setSelectedIds(new Set(collections.map(c => c.id)))
+  const areaCollections = useMemo(
+    () => collections.filter(c => c.area_id === areaId),
+    [collections, areaId]
+  )
+  const selectAll = () => setSelectedIds(new Set(areaCollections.map(c => c.id)))
   const clearSelection = () => { setSelectedIds(new Set()); setSelectionMode(false) }
 
   // Bulk selection state — areas
@@ -706,14 +710,14 @@ function LibraryClient() {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {collections.length === 0 ? (
+                  {areaCollections.length === 0 ? (
                     <div className="col-span-full py-20 bg-white rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
                       <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 mb-4"><FolderOpen size={32} /></div>
                       <p className="text-lg font-bold text-gray-900 mb-1">Esta área no tiene colecciones aún</p>
                       <p className="text-sm text-gray-500 mb-6 max-w-md">Las colecciones te permiten organizar el conocimiento por temas.<br/>Por ejemplo: "Proceso de ventas", "Políticas de RRHH", "Manual técnico"</p>
                       <button onClick={() => setShowCollModal(true)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors">+ Crear primera colección</button>
                     </div>
-                  ) : collections.map(coll => {
+                  ) : areaCollections.map(coll => {
                     const isSelected = selectedIds.has(coll.id)
                     const isDisabled = coll.enabled === false
                     const cardClass = `group relative bg-white p-6 rounded-2xl border transition-all ${
@@ -785,6 +789,12 @@ function LibraryClient() {
                 {/* Document header */}
                 {currentCollection && (
                   <div className="mb-8">
+                    <button
+                      onClick={() => router.push(`/dashboard/library?area=${areaId}`)}
+                      className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-indigo-600 mb-4 transition-colors font-medium"
+                    >
+                      <ArrowLeft size={14} /> Volver al área
+                    </button>
                     <h1 className="text-2xl font-bold text-gray-900">{currentCollection.name}</h1>
                     {currentCollection.description && (
                       <p className="text-gray-500 mt-1">{currentCollection.description}</p>
