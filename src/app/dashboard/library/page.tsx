@@ -411,7 +411,13 @@ function LibraryClient() {
             {/* Breadcrumbs */}
             <div className="flex items-center gap-3 mb-6">
               {areaId && (
-                <button onClick={() => router.back()} className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors shadow-sm">
+                <button
+                  onClick={() => collectionId
+                    ? router.push(`/dashboard/library?area=${areaId}`)
+                    : router.push('/dashboard/library')
+                  }
+                  className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors shadow-sm"
+                >
                   <ArrowLeft size={16} />
                 </button>
               )}
