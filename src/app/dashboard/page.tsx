@@ -48,7 +48,7 @@ export default async function DashboardPage() {
       userName={userName}
       userEmail={userEmail}
       workspaceName={workspace?.name ?? 'Mi workspace'}
-      workspaceId={profile.last_workspace_id}
+      workspaceId={profile.last_workspace_id!}
     />
   )
 }
