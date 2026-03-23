@@ -3,7 +3,7 @@ import { Ragie } from 'ragie'
 export const ragie = new Ragie({ auth: process.env.RAGIE_API_KEY! })
 
 export async function uploadDocument(
-  file: Buffer,
+  file: Uint8Array,
   filename: string,
   metadata: {
     workspace_id: string
