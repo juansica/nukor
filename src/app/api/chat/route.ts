@@ -182,6 +182,15 @@ async function executeTool(name: string, args: any, workspaceId: string, userId:
       return JSON.stringify(data || [])
     }
     case 'get_entries': {
+      // Check if the collection is enabled before returning entries
+      const { data: coll } = await supabase
+        .from('collections')
+        .select('id, enabled')
+        .eq('id', args.collection_id)
+        .maybeSingle()
+      if (coll && coll.enabled === false) {
+        return JSON.stringify({ error: 'Esta colección está desactivada y no está disponible para el asistente.' })
+      }
       const { data } = await supabase
         .from('entries')
         .select('id, title, content')
@@ -404,13 +413,25 @@ export async function POST(request: NextRequest) {
 
     const embedding = queryEmbedding.data[0].embedding
 
+    // Fetch disabled collection IDs so we can exclude them from RAG results
+    const { data: disabledColls } = await supabase
+      .from('collections')
+      .select('id')
+      .eq('workspace_id', effectiveWorkspaceId)
+      .eq('enabled', false)
+    const disabledCollIds = new Set((disabledColls ?? []).map((c: any) => c.id))
+
     // Search for similar entries using pgvector
-    const { data: similarEntries } = await supabase.rpc('match_entries', {
+    const { data: rawSimilarEntries } = await supabase.rpc('match_entries', {
       query_embedding: embedding,
       workspace_id: effectiveWorkspaceId,
       match_threshold: 0.1,
-      match_count: 5,
+      match_count: 8,
     })
+    // Filter out entries from disabled collections
+    const similarEntries = (rawSimilarEntries ?? []).filter(
+      (e: any) => !e.collection_id || !disabledCollIds.has(e.collection_id)
+    ).slice(0, 5)
 
     const activityLogs: any[] = []
     activityLogs.push({ type: 'rag_search', title: 'Buscando en base de conocimiento', detail: userMessage.slice(0, 60) })

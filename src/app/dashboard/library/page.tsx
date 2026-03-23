@@ -20,7 +20,12 @@ import {
   FolderOpen,
   FolderInput,
   ArrowLeft,
-  RotateCcw
+  RotateCcw,
+  CheckSquare,
+  Square,
+  EyeOff,
+  Eye,
+  CheckCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -45,6 +50,7 @@ interface Collection {
   description: string | null
   entries?: { id: string }[]
   updated_at: string
+  enabled?: boolean
 }
 
 interface Entry {
@@ -212,6 +218,40 @@ function LibraryClient() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const [moveDropdownId, setMoveDropdownId] = useState<string | null>(null)
+
+  // Bulk selection state
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const selectAll = () => setSelectedIds(new Set(collections.map(c => c.id)))
+  const clearSelection = () => { setSelectedIds(new Set()); setSelectionMode(false) }
+
+  const handleBulkAction = async (action: 'enable' | 'disable' | 'delete') => {
+    if (selectedIds.size === 0) return
+    if (action === 'delete' && !confirm(`¿Eliminar ${selectedIds.size} colección(es) y todas sus entradas? Esta acción no se puede deshacer.`)) return
+    setBulkLoading(true)
+    try {
+      const res = await fetch('/api/collections/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids: Array.from(selectedIds) }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Error al ejecutar la acción'); return }
+      if (action === 'delete') {
+        setCollections(prev => prev.filter(c => !selectedIds.has(c.id)))
+        toast.success(`${selectedIds.size} colección(es) eliminada(s)`)
+      } else {
+        setCollections(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, enabled: action === 'enable' } : c))
+        toast.success(action === 'disable' ? `${selectedIds.size} colección(es) desactivada(s) del asistente` : `${selectedIds.size} colección(es) activada(s)`)
+      }
+      clearSelection()
+    } catch { toast.error('Error de red') }
+    finally { setBulkLoading(false) }
+  }
 
   // Inline document editing state
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
@@ -422,6 +462,15 @@ function LibraryClient() {
               <RotateCcw size={20} className={loading ? 'animate-spin' : ''} />
             </button>
             {!areaId && libraryTab === 'entries' && <button onClick={() => setShowAreaModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva área</button>}
+            {areaId && !collectionId && areaId !== 'unclassified' && (
+              <button
+                onClick={() => { setSelectionMode(s => !s); setSelectedIds(new Set()) }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm ${selectionMode ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >
+                <CheckSquare size={16} />
+                {selectionMode ? 'Cancelar' : 'Seleccionar'}
+              </button>
+            )}
             {areaId && !collectionId && <button onClick={() => setShowCollModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva colección</button>}
             {collectionId && <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm"><Plus size={18} /> Nueva entrada</Link>}
           </div>
@@ -577,16 +626,44 @@ function LibraryClient() {
                       <p className="text-sm text-gray-500 mb-6 max-w-md">Las colecciones te permiten organizar el conocimiento por temas.<br/>Por ejemplo: "Proceso de ventas", "Políticas de RRHH", "Manual técnico"</p>
                       <button onClick={() => setShowCollModal(true)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors">+ Crear primera colección</button>
                     </div>
-                  ) : collections.map(coll => (
-                  <Link key={coll.id} href={`/dashboard/library?area=${areaId}&collection=${coll.id}`} className="group bg-white p-6 rounded-2xl border border-gray-200 hover:border-indigo-200 hover:shadow-lg transition-all">
-                    <div className="p-2 w-fit rounded-lg bg-gray-50 text-gray-400 mb-4 font-bold group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors"><Grid size={20} /></div>
-                    <h3 className="text-base font-bold text-gray-950 mb-1">{coll.name}</h3>
-                    <div className="flex items-center justify-between mt-6 text-[11px] font-bold text-gray-400">
-                       <span className="bg-gray-50 px-2 py-0.5 rounded-md">{entries.filter(e => e.collection_id === coll.id).length} entradas</span>
-                       <span>Actualizado {formatDate(coll.updated_at)}</span>
-                    </div>
-                  </Link>
-                ))}
+                  ) : collections.map(coll => {
+                    const isSelected = selectedIds.has(coll.id)
+                    const isDisabled = coll.enabled === false
+                    const cardClass = `group relative bg-white p-6 rounded-2xl border transition-all ${
+                      isSelected ? 'border-indigo-500 ring-2 ring-indigo-200 shadow-md' :
+                      isDisabled ? 'border-gray-200 opacity-60' :
+                      'border-gray-200 hover:border-indigo-200 hover:shadow-lg'
+                    }`
+                    const inner = (
+                      <>
+                        {/* Selection checkbox */}
+                        {selectionMode && (
+                          <div className={`absolute top-3 right-3 z-10 w-5 h-5 rounded flex items-center justify-center transition-colors ${isSelected ? 'text-indigo-600' : 'text-gray-300'}`}>
+                            {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                          </div>
+                        )}
+                        {/* Disabled badge */}
+                        {isDisabled && (
+                          <span className="absolute top-3 left-3 z-10 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                            <EyeOff size={10} /> Sin acceso IA
+                          </span>
+                        )}
+                        <div className={`p-2 w-fit rounded-lg mb-4 font-bold transition-colors ${isDisabled ? 'bg-gray-50 text-gray-300' : 'bg-gray-50 text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600'}`}>
+                          <Grid size={20} />
+                        </div>
+                        <h3 className="text-base font-bold text-gray-950 mb-1">{coll.name}</h3>
+                        <div className="flex items-center justify-between mt-6 text-[11px] font-bold text-gray-400">
+                          <span className="bg-gray-50 px-2 py-0.5 rounded-md">{entries.filter(e => e.collection_id === coll.id).length} entradas</span>
+                          <span>Actualizado {formatDate(coll.updated_at)}</span>
+                        </div>
+                      </>
+                    )
+                    return selectionMode ? (
+                      <div key={coll.id} onClick={() => toggleSelect(coll.id)} className={`${cardClass} cursor-pointer select-none`}>{inner}</div>
+                    ) : (
+                      <Link key={coll.id} href={`/dashboard/library?area=${areaId}&collection=${coll.id}`} className={cardClass}>{inner}</Link>
+                    )
+                  })}
               </div>
               </>
             )}
@@ -851,6 +928,52 @@ function LibraryClient() {
 
       {showAreaModal && <NewAreaModal onClose={() => setShowAreaModal(false)} onSaved={fetchData} userId={currentUserId || ''} />}
       {showCollModal && <NewCollectionModal onClose={() => setShowCollModal(false)} onSaved={fetchData} userId={currentUserId || ''} areaId={areaId || ''} />}
+
+      {/* Floating bulk action bar */}
+      {selectionMode && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2 bg-gray-950 text-white rounded-2xl px-4 py-3 shadow-2xl shadow-black/30 border border-white/10">
+            <span className="text-sm font-semibold text-gray-300 mr-1">
+              {selectedIds.size > 0 ? `${selectedIds.size} seleccionada${selectedIds.size !== 1 ? 's' : ''}` : 'Sin selección'}
+            </span>
+            <div className="w-px h-5 bg-white/20 mx-1" />
+            <button
+              onClick={selectAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <CheckCheck size={14} /> Seleccionar todo
+            </button>
+            <button
+              onClick={() => handleBulkAction('enable')}
+              disabled={selectedIds.size === 0 || bulkLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <Eye size={14} /> Activar IA
+            </button>
+            <button
+              onClick={() => handleBulkAction('disable')}
+              disabled={selectedIds.size === 0 || bulkLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <EyeOff size={14} /> Desactivar IA
+            </button>
+            <button
+              onClick={() => handleBulkAction('delete')}
+              disabled={selectedIds.size === 0 || bulkLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <Trash2 size={14} /> Eliminar
+            </button>
+            <div className="w-px h-5 bg-white/20 mx-1" />
+            <button
+              onClick={clearSelection}
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
