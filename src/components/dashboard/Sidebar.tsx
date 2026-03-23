@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { IConversation } from '@/types/chat'
 import SignOutButton from '@/components/auth/SignOutButton'
-import { Plus, BookOpen, Layers, ChevronDown, X, Check, Plug } from 'lucide-react'
+import { Plus, BookOpen, MessageSquare, Settings, ChevronDown, X, Check } from 'lucide-react'
 
 interface SidebarProps {
   activeConversationId: string | null
@@ -16,12 +16,6 @@ interface SidebarProps {
   onClose: () => void
   onDeleteConversation?: (id: string) => void
 }
-
-const navItems = [
-  { label: 'Base de conocimientos', Icon: BookOpen, path: '/dashboard/library' },
-  { label: 'Áreas', Icon: Layers, path: '/dashboard/areas' },
-  { label: 'Integraciones', Icon: Plug, path: '/dashboard/settings/integrations' },
-]
 
 const Sidebar = ({
   activeConversationId,
@@ -94,6 +88,10 @@ const Sidebar = ({
     onClose()
   }
 
+  const isChatActive = pathname === '/dashboard'
+  const isLibraryActive = pathname.startsWith('/dashboard/library')
+  const isSettingsActive = pathname.startsWith('/dashboard/settings')
+
   return (
     <div className="flex flex-col h-full bg-white text-gray-950">
       {/* Header */}
@@ -161,32 +159,59 @@ const Sidebar = ({
         </motion.button>
       </div>
 
-      {/* Nav */}
-      <nav className="px-3 pb-3 flex-shrink-0">
-        {navItems.map(({ label, Icon, path }) => {
-          const isActive = pathname.startsWith(path)
-          return (
-            <Link
-              key={label}
-              href={path}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left border border-transparent ${
-                isActive
-                  ? 'bg-indigo-50 text-indigo-600'
-                  : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
-              }`}
-              onClick={onClose}
-            >
-              <Icon size={18} className={isActive ? 'text-indigo-600' : 'text-gray-400'} />
-              {label}
-            </Link>
-          )
-        })}
+      {/* Nav — PRINCIPAL */}
+      <nav className="px-3 pb-2 flex-shrink-0">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1.5">Principal</p>
+        <Link
+          href="/dashboard"
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
+            isChatActive
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+          }`}
+          onClick={onClose}
+        >
+          <MessageSquare size={18} className={isChatActive ? 'text-indigo-600' : 'text-gray-400'} />
+          Chat
+        </Link>
+        <Link
+          href="/dashboard/library"
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
+            isLibraryActive
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+          }`}
+          onClick={onClose}
+        >
+          <BookOpen size={18} className={isLibraryActive ? 'text-indigo-600' : 'text-gray-400'} />
+          Base de conocimiento
+        </Link>
       </nav>
 
-      <div className="mx-5 border-t border-gray-200 flex-shrink-0" />
+      {/* Nav — GESTIÓN */}
+      <nav className="px-3 pb-3 flex-shrink-0">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1.5 mt-2">Gestión</p>
+        <Link
+          href="/dashboard/settings"
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
+            isSettingsActive
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+          }`}
+          onClick={onClose}
+        >
+          <Settings size={18} className={isSettingsActive ? 'text-indigo-600' : 'text-gray-400'} />
+          Configuración
+        </Link>
+      </nav>
+
+      {/* HISTORIAL section label */}
+      <div className="px-6 flex-shrink-0">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Historial</p>
+      </div>
 
       {/* Conversations grouped by date */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
         {conversations.length === 0 ? (
           <p className="text-xs px-2 py-2 leading-relaxed text-gray-400">
             Tus conversaciones aparecerán aquí
@@ -269,7 +294,7 @@ const Sidebar = ({
       {/* Create workspace modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center z-[100] animate-in fade-in duration-200">
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-in zoom-in-95 duration-200 border border-gray-100"
             onClick={(e) => e.stopPropagation()}
           >
