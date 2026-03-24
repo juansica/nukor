@@ -12,21 +12,40 @@ interface UserMenuProps {
 
 export default function UserMenu({ userName, userEmail }: UserMenuProps) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const initials = userName.slice(0, 2).toUpperCase()
+
+  const handleOpen = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setDropdownPos({
+        top: rect.bottom + 6,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setOpen(o => !o)
+  }
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={buttonRef}
+        onClick={handleOpen}
         className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
       >
         <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 flex-shrink-0">
@@ -37,7 +56,11 @@ export default function UserMenu({ userName, userEmail }: UserMenuProps) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+        <div
+          ref={dropdownRef}
+          style={{ top: dropdownPos.top, right: dropdownPos.right }}
+          className="fixed w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-[200] overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+        >
           <div className="px-4 py-3 border-b border-gray-100">
             <p className="text-sm font-semibold text-gray-950 truncate">{userName}</p>
             <p className="text-xs text-gray-400 truncate mt-0.5">{userEmail}</p>
