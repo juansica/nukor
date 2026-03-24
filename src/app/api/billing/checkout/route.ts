@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { createCheckoutUrl } from '@/lib/lemonsqueezy'
+import { createCheckoutUrl } from '@/lib/paddle'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('last_workspace_id, full_name')
+      .select('last_workspace_id')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -33,11 +33,11 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Workspace not found' }, { status: 404 })
     }
 
-    const variantId = process.env.LEMONSQUEEZY_PRO_VARIANT_ID!
+    const priceId = process.env.PADDLE_PRICE_ID!
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
     const checkoutUrl = await createCheckoutUrl({
-      variantId,
+      priceId,
       userEmail: user.email!,
       workspaceId,
       successUrl: `${baseUrl}/dashboard/settings?tab=plan&upgraded=true`,

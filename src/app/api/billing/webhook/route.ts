@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@supabase/supabase-js'
-import { verifyWebhookSignature } from '@/lib/lemonsqueezy'
+import { verifyWebhookSignature } from '@/lib/paddle'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: Request) {
   const rawBody = await req.text()
-  const signature = req.headers.get('x-signature') ?? ''
+  const signature = req.headers.get('paddle-signature') ?? ''
 
   if (!verifyWebhookSignature(rawBody, signature)) {
     return Response.json({ error: 'Invalid signature' }, { status: 401 })
@@ -23,55 +23,52 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const eventName: string = event.meta?.event_name ?? ''
-  const attrs = event.data?.attributes ?? {}
-  const workspaceId: string | undefined = event.meta?.custom_data?.workspace_id
+  const eventType: string = event.event_type ?? ''
+  const data = event.data ?? {}
+  const workspaceId: string | undefined = data.custom_data?.workspace_id
 
   if (!workspaceId) {
-    console.warn('[billing/webhook] Missing workspace_id in custom_data', eventName)
+    console.warn('[billing/webhook] Missing workspace_id in custom_data', eventType)
     return Response.json({ received: true })
   }
 
-  const subscriptionId = String(event.data?.id ?? '')
-  const customerId = String(attrs.customer_id ?? '')
-  const status: string = attrs.status ?? 'active'
-  const endsAt: string | null = attrs.ends_at ?? null
-  const renewsAt: string | null = attrs.renews_at ?? null
+  const subscriptionId: string = data.id ?? ''
+  const customerId: string = data.customer_id ?? ''
+  const status: string = data.status ?? 'active'
+  const periodEnd: string | null = data.current_billing_period?.ends_at ?? data.next_billed_at ?? null
 
-  switch (eventName) {
-    case 'subscription_created':
-    case 'subscription_updated':
-    case 'subscription_resumed': {
-      const plan = status === 'active' || status === 'on_trial' ? 'pro' : 'free'
+  switch (eventType) {
+    case 'subscription.created':
+    case 'subscription.updated':
+    case 'subscription.resumed': {
+      const plan = status === 'active' || status === 'trialing' ? 'pro' : 'free'
       await supabaseAdmin
         .from('workspaces')
         .update({
           plan,
-          ls_subscription_id: subscriptionId,
-          ls_customer_id: customerId,
+          paddle_subscription_id: subscriptionId,
+          paddle_customer_id: customerId,
           subscription_status: status,
-          current_period_end: endsAt ?? renewsAt,
+          current_period_end: periodEnd,
         })
         .eq('id', workspaceId)
       break
     }
 
-    case 'subscription_cancelled':
-    case 'subscription_expired':
-    case 'subscription_paused': {
+    case 'subscription.canceled':
+    case 'subscription.paused': {
       await supabaseAdmin
         .from('workspaces')
         .update({
           plan: 'free',
           subscription_status: status,
-          current_period_end: endsAt,
+          current_period_end: periodEnd,
         })
         .eq('id', workspaceId)
       break
     }
 
     default:
-      // Unhandled event — ignore
       break
   }
 

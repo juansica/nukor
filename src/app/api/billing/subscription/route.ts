@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { getCustomerPortalUrl } from '@/lib/lemonsqueezy'
+import { getCustomerPortalUrl } from '@/lib/paddle'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,7 +24,7 @@ export async function GET() {
 
     const { data: ws } = await supabaseAdmin
       .from('workspaces')
-      .select('plan, ls_subscription_id, ls_customer_id, subscription_status, current_period_end')
+      .select('plan, paddle_subscription_id, paddle_customer_id, subscription_status, current_period_end')
       .eq('id', workspaceId)
       .maybeSingle()
 
@@ -32,11 +32,11 @@ export async function GET() {
     const status = ws?.subscription_status ?? null
     const currentPeriodEnd = ws?.current_period_end ?? null
 
-    // Fetch portal URL for Pro users
+    // Fetch portal URL for Pro users — new session each time (Paddle portal URLs are not cacheable)
     let portalUrl: string | null = null
-    if (ws?.ls_customer_id) {
+    if (ws?.paddle_customer_id) {
       try {
-        portalUrl = await getCustomerPortalUrl(ws.ls_customer_id)
+        portalUrl = await getCustomerPortalUrl(ws.paddle_customer_id, ws.paddle_subscription_id ?? undefined)
       } catch {
         // Non-fatal — portal URL is best-effort
       }
