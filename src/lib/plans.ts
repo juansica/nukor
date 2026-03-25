@@ -11,6 +11,7 @@ export interface PlanConfig {
   maxIntegrations: number | null // null = unlimited
   aiDailyLimit: boolean          // true = has a daily AI usage cap
   whatsappEnabled: boolean       // Nukor for WhatsApp channel
+  maxPhoneMembers: number | null // null = unlimited; 0 = feature disabled
   apiAccess: boolean
   prioritySupport: boolean
   customOnboarding: boolean
@@ -25,6 +26,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     maxIntegrations: 0,
     aiDailyLimit: true,
     whatsappEnabled: false,
+    maxPhoneMembers: 0,
     apiAccess: false,
     prioritySupport: false,
     customOnboarding: false,
@@ -38,6 +40,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     maxIntegrations: 2,
     aiDailyLimit: false,
     whatsappEnabled: false,
+    maxPhoneMembers: 0,
     apiAccess: false,
     prioritySupport: false,
     customOnboarding: false,
@@ -50,6 +53,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     maxIntegrations: 5,
     aiDailyLimit: false,
     whatsappEnabled: true,
+    maxPhoneMembers: 50,
     apiAccess: false,
     prioritySupport: true,
     customOnboarding: false,
@@ -62,6 +66,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     maxIntegrations: null,
     aiDailyLimit: false,
     whatsappEnabled: true,
+    maxPhoneMembers: null,
     apiAccess: true,
     prioritySupport: true,
     customOnboarding: true,
@@ -103,4 +108,10 @@ export function withinDocumentLimit(planId: string | null | undefined, currentDo
 export function withinIntegrationLimit(planId: string | null | undefined, currentIntegrations: number): boolean {
   const limit = getPlan(planId).maxIntegrations
   return limit === null || currentIntegrations < limit
+}
+
+/** Returns true if the workspace is within the phone member limit. */
+export function withinPhoneMemberLimit(planId: string | null | undefined, currentMembers: number): boolean {
+  const limit = getPlan(planId).maxPhoneMembers
+  return limit === null || currentMembers < limit
 }

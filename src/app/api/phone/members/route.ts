@@ -1,5 +1,6 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { canUseFeature, withinPhoneMemberLimit } from '@/lib/plans'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -65,6 +66,25 @@ export async function POST(request: Request) {
       .maybeSingle()
     if (!membership || membership.role !== 'admin') {
       return Response.json({ error: 'Solo los admins pueden agregar miembros de WhatsApp' }, { status: 403 })
+    }
+
+    // Check plan allows WhatsApp
+    const { data: ws } = await supabaseAdmin
+      .from('workspaces')
+      .select('plan')
+      .eq('id', workspace_id)
+      .maybeSingle()
+    if (!canUseFeature(ws?.plan, 'whatsappEnabled')) {
+      return Response.json({ error: 'Tu plan no incluye Nukor for WhatsApp. Actualiza a Pro o Enterprise.' }, { status: 403 })
+    }
+
+    // Check phone member limit
+    const { count } = await supabaseAdmin
+      .from('phone_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspace_id)
+    if (!withinPhoneMemberLimit(ws?.plan, count ?? 0)) {
+      return Response.json({ error: 'Has alcanzado el límite de miembros de WhatsApp de tu plan.' }, { status: 403 })
     }
 
     // Check if number already registered

@@ -88,6 +88,8 @@ function AssistantSettingsContent() {
   const [savingAi, setSavingAi] = useState(false)
   const [aiUpdatedAt, setAiUpdatedAt] = useState<string | null>(null)
 
+  const [currentPlan, setCurrentPlan] = useState<string | null>(null)
+
   // ── WhatsApp ──
   const [phoneMembers, setPhoneMembers] = useState<{ id: string; phone_number: string; name: string; activated: boolean; created_at: string }[]>([])
   const [loadingPhoneMembers, setLoadingPhoneMembers] = useState(false)
@@ -110,8 +112,9 @@ function AssistantSettingsContent() {
       setWorkspaceId(profile.last_workspace_id)
 
       const { data: ws } = await supabase
-        .from('workspaces').select('name, ai_config').eq('id', profile.last_workspace_id).maybeSingle()
+        .from('workspaces').select('name, ai_config, plan').eq('id', profile.last_workspace_id).maybeSingle()
       if (ws?.name) setWorkspaceName(ws.name)
+      if (ws?.plan !== undefined) setCurrentPlan(ws.plan)
       if (ws?.ai_config) {
         const cfg = ws.ai_config
         setAiCfg(prev => ({
@@ -559,10 +562,32 @@ function AssistantSettingsContent() {
                     </ol>
                   </div>
 
+                  {/* Plan gate */}
+                  {currentPlan !== null && !['pro', 'enterprise'].includes(currentPlan) && (
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex gap-3 items-start">
+                      <Smartphone size={16} className="text-indigo-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-indigo-800">Nukor for WhatsApp requiere el plan Pro</p>
+                        <p className="text-xs text-indigo-600 mt-0.5">Actualiza tu plan para agregar miembros y conectar el asistente a WhatsApp.</p>
+                      </div>
+                      <button
+                        onClick={() => router.push('/dashboard/settings?tab=plan')}
+                        className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0"
+                      >
+                        Ver planes
+                      </button>
+                    </div>
+                  )}
+
                   {/* Members list */}
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <div className={`bg-white border border-gray-200 rounded-xl overflow-hidden ${currentPlan !== null && !['pro', 'enterprise'].includes(currentPlan) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
                     <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                      <p className="text-sm font-bold text-gray-950">Miembros registrados</p>
+                      <div>
+                        <p className="text-sm font-bold text-gray-950">Miembros registrados</p>
+                        {currentPlan === 'pro' && (
+                          <p className="text-xs text-gray-400 mt-0.5">{phoneMembers.length} / 50</p>
+                        )}
+                      </div>
                       <button
                         onClick={() => setShowAddPhone(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
