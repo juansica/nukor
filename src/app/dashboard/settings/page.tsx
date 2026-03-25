@@ -52,7 +52,7 @@ function SettingsContent() {
   const [conversationsCount, setConversationsCount] = useState<number | null>(null)
   const [integrationsCount, setIntegrationsCount] = useState<number | null>(null)
   const [membersCount, setMembersCount] = useState<number | null>(null)
-  const [currentPlan, setCurrentPlan] = useState<'free' | 'pro'>('free')
+  const [currentPlan, setCurrentPlan] = useState<string>('free')
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null)
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
@@ -379,15 +379,26 @@ function SettingsContent() {
 
               {/* ── PLAN ── */}
               {activeTab === 'plan' && (() => {
-                const isPro = currentPlan === 'pro'
-                const FREE_LIMITS = { entries: 100, members: 3, integrations: 2 }
-
+                const isPaid = currentPlan !== 'free' && currentPlan !== 'starter'
+                const planLabel: Record<string, string> = {
+                  free: 'Starter (Gratuito)', starter: 'Starter (Gratuito)',
+                  pro: 'Plus', plus: 'Plus',
+                  pro_whatsapp: 'Pro', enterprise: 'Enterprise',
+                }
+                const planLimits: Record<string, { entries: number | null, members: number | null, integrations: number | null }> = {
+                  free:     { entries: 100, members: 3,  integrations: 0 },
+                  starter:  { entries: 100, members: 3,  integrations: 0 },
+                  pro:      { entries: 25,  members: 5,  integrations: 2 },
+                  plus:     { entries: 25,  members: 5,  integrations: 2 },
+                  pro_whatsapp: { entries: null, members: null, integrations: null },
+                  enterprise:   { entries: null, members: null, integrations: null },
+                }
+                const limits = planLimits[currentPlan] ?? planLimits.free
                 const usageItems = [
-                  { label: 'Entradas en biblioteca', value: entriesCount ?? 0, limit: isPro ? null : FREE_LIMITS.entries },
-                  { label: 'Miembros', value: membersCount ?? 0, limit: isPro ? null : FREE_LIMITS.members },
-                  { label: 'Integraciones', value: integrationsCount ?? 0, limit: isPro ? null : FREE_LIMITS.integrations },
+                  { label: 'Entradas en biblioteca', value: entriesCount ?? 0, limit: limits.entries },
+                  { label: 'Miembros', value: membersCount ?? 0, limit: limits.members },
+                  { label: 'Integraciones', value: integrationsCount ?? 0, limit: limits.integrations },
                 ]
-
                 const statusLabel: Record<string, string> = {
                   active: 'Activo', on_trial: 'Prueba', paused: 'Pausado',
                   cancelled: 'Cancelado', expired: 'Vencido',
@@ -408,17 +419,17 @@ function SettingsContent() {
                     </div>
 
                     {/* Current plan card */}
-                    <div className={`rounded-xl border p-6 ${isPro ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white border-gray-200'}`}>
+                    <div className={`rounded-xl border p-6 ${isPaid ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white border-gray-200'}`}>
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${isPro ? 'text-indigo-200' : 'text-gray-400'}`}>
+                          <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${isPaid ? 'text-indigo-200' : 'text-gray-400'}`}>
                             Plan actual
                           </p>
-                          <p className={`text-2xl font-bold tracking-tight ${isPro ? 'text-white' : 'text-gray-950'}`}>
-                            {isPro ? 'Plan Pro' : 'Plan Gratuito'}
+                          <p className={`text-2xl font-bold tracking-tight ${isPaid ? 'text-white' : 'text-gray-950'}`}>
+                            {planLabel[currentPlan] ?? 'Starter (Gratuito)'}
                           </p>
                           {currentPeriodEnd && (
-                            <p className={`text-xs mt-1 ${isPro ? 'text-indigo-200' : 'text-gray-400'}`}>
+                            <p className={`text-xs mt-1 ${isPaid ? 'text-indigo-200' : 'text-gray-400'}`}>
                               {subscriptionStatus === 'cancelled' ? 'Acceso hasta' : 'Renueva el'}{' '}
                               {new Date(currentPeriodEnd).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}
                             </p>
@@ -430,7 +441,7 @@ function SettingsContent() {
                               {statusLabel[subscriptionStatus] ?? subscriptionStatus}
                             </span>
                           )}
-                          {!isPro && (
+                          {!isPaid && (
                             <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500">
                               Gratuito
                             </span>
@@ -438,7 +449,7 @@ function SettingsContent() {
                         </div>
                       </div>
                       <div className="mt-5 flex flex-wrap gap-2">
-                        {isPro ? (
+                        {isPaid ? (
                           portalUrl ? (
                             <a href={portalUrl} target="_blank" rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors"
@@ -454,7 +465,7 @@ function SettingsContent() {
                             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm"
                           >
                             <Zap size={14} />
-                            {upgradingPlan ? 'Redirigiendo...' : 'Actualizar a Pro'}
+                            {upgradingPlan ? 'Redirigiendo...' : 'Actualizar a Plus'}
                           </button>
                         )}
                       </div>
@@ -492,40 +503,66 @@ function SettingsContent() {
                       </div>
                     </div>
 
-                    {/* Pro plan card — only shown on free */}
-                    {!isPro && (
-                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-bold text-gray-950">Plan Pro</p>
-                            <p className="text-xs text-gray-400 mt-0.5">Todo lo que necesitas para escalar</p>
+                    {/* Upgrade cards — shown when not on highest paid plan */}
+                    {!isPaid && (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        {/* Plus */}
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-gray-950">Plus</p>
+                              <p className="text-xs text-gray-400 mt-0.5">Para equipos pequeños</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xl font-bold text-gray-950">$29.99</p>
+                              <p className="text-xs text-gray-400">/ mes</p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-gray-950 tracking-tight">$29</p>
-                            <p className="text-xs text-gray-400">/ mes</p>
+                          <div className="px-5 py-4">
+                            <ul className="space-y-2 mb-4">
+                              {['Hasta 5 usuarios', 'Hasta 25 documentos', 'IA sin límite', 'Hasta 2 integraciones'].map(f => (
+                                <li key={f} className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Check size={13} className="text-emerald-500 flex-shrink-0" />{f}
+                                </li>
+                              ))}
+                            </ul>
+                            <button onClick={handleUpgrade} disabled={upgradingPlan}
+                              className="w-full py-2 text-sm font-semibold bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 disabled:opacity-60 transition-colors"
+                            >
+                              {upgradingPlan ? 'Redirigiendo...' : 'Empezar con Plus'}
+                            </button>
                           </div>
                         </div>
-                        <div className="px-6 py-5">
-                          <ul className="space-y-2.5 mb-6">
-                            {[
-                              'Entradas ilimitadas en biblioteca',
-                              'Hasta 15 miembros',
-                              'Todas las integraciones (Google Drive, Notion, Slack…)',
-                              'Asistente IA con prioridad',
-                              'Soporte prioritario',
-                            ].map(feat => (
-                              <li key={feat} className="flex items-start gap-2.5 text-sm text-gray-700">
-                                <Check size={15} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-                                {feat}
-                              </li>
-                            ))}
-                          </ul>
-                          <button onClick={handleUpgrade} disabled={upgradingPlan}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm"
-                          >
-                            <Zap size={14} />
-                            {upgradingPlan ? 'Redirigiendo...' : 'Empezar con Pro'}
-                          </button>
+                        {/* Pro */}
+                        <div className="bg-white border-2 border-indigo-600 rounded-xl overflow-hidden">
+                          <div className="px-5 py-4 border-b border-indigo-100 flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-gray-950">Pro</p>
+                              <p className="text-xs text-indigo-600 font-semibold mt-0.5">+ WhatsApp incluido</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xl font-bold text-gray-950">$49.990</p>
+                              <p className="text-xs text-gray-400">/ mes</p>
+                            </div>
+                          </div>
+                          <div className="px-5 py-4">
+                            <ul className="space-y-2 mb-4">
+                              {['Hasta 15 usuarios', 'Hasta 100 documentos', 'Nukor for WhatsApp', 'Hasta 5 integraciones', 'Soporte prioritario'].map(f => (
+                                <li key={f} className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Check size={13} className={f === 'Nukor for WhatsApp' ? 'text-indigo-600 flex-shrink-0' : 'text-emerald-500 flex-shrink-0'} />
+                                  <span className={f === 'Nukor for WhatsApp' ? 'font-semibold text-indigo-700' : ''}>{f}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            <button onClick={handleUpgrade} disabled={upgradingPlan}
+                              className="w-full py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm"
+                            >
+                              <span className="flex items-center justify-center gap-1.5">
+                                <Zap size={13} />
+                                {upgradingPlan ? 'Redirigiendo...' : 'Empezar con Pro'}
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}

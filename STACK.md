@@ -1,4 +1,4 @@
-# Nukor — Tech Stack, Structure & Features
+ps# Nukor — Tech Stack, Structure & Features
 
 ## Overview
 AI-powered company knowledge base with collaborative workspaces. The assistant captures, organizes, and answers questions using company knowledge from conversations, documents, and connected tools. Spanish-first UI.
@@ -251,11 +251,12 @@ remotion/
 - Customer portal link
 - Plan enforcement via `src/lib/plans.ts`
 
-| Plan | Users | Documents | Integrations | AI |
-|---|---|---|---|---|
-| Starter | 1 | 10 | 0 | Daily limit |
-| Pro | 5 | 25 | 2 | Unlimited |
-| Enterprise | 50 | Unlimited | Unlimited | Unlimited + API |
+| Plan | Users | Documents | Integrations | WhatsApp | AI |
+|---|---|---|---|---|---|
+| Starter | 1 | 10 | 0 | ✗ | Daily limit |
+| Plus | 5 | 25 | 2 | ✗ | Unlimited |
+| Pro | 15 | 100 | 5 | ✅ | Unlimited |
+| Enterprise | Unlimited | Unlimited | Unlimited | ✅ | Unlimited + API |
 
 ### Auth
 - Email/password via Supabase

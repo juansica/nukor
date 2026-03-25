@@ -1,7 +1,7 @@
 // Central plan configuration.
 // Import this anywhere you need to enforce or display plan limits.
 
-export type PlanId = 'starter' | 'pro' | 'enterprise'
+export type PlanId = 'starter' | 'plus' | 'pro' | 'enterprise'
 
 export interface PlanConfig {
   id: PlanId
@@ -10,6 +10,7 @@ export interface PlanConfig {
   maxDocuments: number | null    // null = unlimited
   maxIntegrations: number | null // null = unlimited
   aiDailyLimit: boolean          // true = has a daily AI usage cap
+  whatsappEnabled: boolean       // Nukor for WhatsApp channel
   apiAccess: boolean
   prioritySupport: boolean
   customOnboarding: boolean
@@ -23,6 +24,20 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     maxDocuments: 10,
     maxIntegrations: 0,
     aiDailyLimit: true,
+    whatsappEnabled: false,
+    apiAccess: false,
+    prioritySupport: false,
+    customOnboarding: false,
+  },
+  // Previously the 'pro' plan — renamed to Plus, DB value 'pro' maps here via getPlan()
+  plus: {
+    id: 'plus',
+    name: 'Plus',
+    maxUsers: 5,
+    maxDocuments: 25,
+    maxIntegrations: 2,
+    aiDailyLimit: false,
+    whatsappEnabled: false,
     apiAccess: false,
     prioritySupport: false,
     customOnboarding: false,
@@ -30,36 +45,44 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    maxUsers: 5,
-    maxDocuments: 25,
-    maxIntegrations: 2,
+    maxUsers: 15,
+    maxDocuments: 100,
+    maxIntegrations: 5,
     aiDailyLimit: false,
+    whatsappEnabled: true,
     apiAccess: false,
-    prioritySupport: false,
+    prioritySupport: true,
     customOnboarding: false,
   },
   enterprise: {
     id: 'enterprise',
     name: 'Enterprise',
-    maxUsers: 50,
+    maxUsers: null,
     maxDocuments: null,
     maxIntegrations: null,
     aiDailyLimit: false,
+    whatsappEnabled: true,
     apiAccess: true,
     prioritySupport: true,
     customOnboarding: true,
   },
 }
 
-/** Returns the plan config for a workspace's current plan string, defaulting to starter. */
+/**
+ * Returns the plan config for a workspace's current plan string.
+ * Legacy DB value 'pro' (old Pro plan) maps to 'plus' until DB migration runs.
+ * Defaults to starter.
+ */
 export function getPlan(planId: string | null | undefined): PlanConfig {
-  return PLANS[(planId as PlanId) ?? 'starter'] ?? PLANS.starter
+  // Legacy: old 'pro' rows in DB are the renamed Plus plan
+  const normalized = planId === 'pro' ? 'plus' : planId
+  return PLANS[(normalized as PlanId)] ?? PLANS.starter
 }
 
 /** Returns true if the workspace plan allows the given feature. */
 export function canUseFeature(
   planId: string | null | undefined,
-  feature: keyof Pick<PlanConfig, 'apiAccess' | 'prioritySupport' | 'customOnboarding'>
+  feature: keyof Pick<PlanConfig, 'apiAccess' | 'prioritySupport' | 'customOnboarding' | 'whatsappEnabled'>
 ): boolean {
   return getPlan(planId)[feature]
 }
