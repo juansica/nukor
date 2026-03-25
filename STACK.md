@@ -71,6 +71,12 @@ PADDLE_PRICE_ID
 
 # App
 NEXT_PUBLIC_APP_URL
+
+# WhatsApp (Meta Cloud API) — required for Nukor for WhatsApp
+META_WHATSAPP_TOKEN        # Permanent access token from Meta app
+META_PHONE_NUMBER_ID       # Phone number ID from Meta Business dashboard
+META_APP_SECRET            # App secret for X-Hub-Signature-256 verification
+META_WEBHOOK_VERIFY_TOKEN  # Custom string used to verify the webhook URL
 ```
 
 ---

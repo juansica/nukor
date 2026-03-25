@@ -159,7 +159,7 @@ export default function DashboardClient({ userId, userName, userEmail, workspace
       timestamp: new Date(),
     }
     setConversations((prev) =>
-      prev.map((c) => (c.id === capturedId ? { ...c, messages: [...c.messages, userMsg] } : c))
+      prev.map((c) => (c.id === capturedId ? { ...c, messages: [...c.messages, userMsg], updated_at: new Date().toISOString() } : c))
     )
 
     const MAX_MESSAGES = 20

@@ -7,13 +7,14 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import UserMenu from '@/components/dashboard/UserMenu'
 import IntegrationsTab from '@/components/settings/IntegrationsTab'
 import {
-  Menu, Save, AlertTriangle, ChevronDown, ChevronRight,
+  Menu, Save, AlertTriangle, ChevronDown, ChevronRight, Plus, X, Smartphone, CheckCircle, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const ASSISTANT_TABS = [
   { id: 'ai', label: 'Asistente IA', icon: '🤖' },
   { id: 'integrations', label: 'Integraciones', icon: '🔌' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: '📱' },
 ]
 
 const TONES = [
@@ -87,6 +88,14 @@ function AssistantSettingsContent() {
   const [savingAi, setSavingAi] = useState(false)
   const [aiUpdatedAt, setAiUpdatedAt] = useState<string | null>(null)
 
+  // ── WhatsApp ──
+  const [phoneMembers, setPhoneMembers] = useState<{ id: string; phone_number: string; name: string; activated: boolean; created_at: string }[]>([])
+  const [loadingPhoneMembers, setLoadingPhoneMembers] = useState(false)
+  const [showAddPhone, setShowAddPhone] = useState(false)
+  const [newPhoneName, setNewPhoneName] = useState('')
+  const [newPhoneNumber, setNewPhoneNumber] = useState('')
+  const [addingPhone, setAddingPhone] = useState(false)
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -128,7 +137,56 @@ function AssistantSettingsContent() {
     if (activeTab === 'ai' && workspaceId) {
       fetch('/api/areas').then(r => r.json()).then(d => setAreas(d.areas || []))
     }
+    if (activeTab === 'whatsapp' && workspaceId) {
+      fetchPhoneMembers()
+    }
   }, [activeTab, workspaceId])
+
+  const fetchPhoneMembers = async () => {
+    if (!workspaceId) return
+    setLoadingPhoneMembers(true)
+    try {
+      const res = await fetch(`/api/phone/members?workspace_id=${workspaceId}`)
+      const data = await res.json()
+      setPhoneMembers(data.members ?? [])
+    } catch { /* ignore */ } finally {
+      setLoadingPhoneMembers(false)
+    }
+  }
+
+  const handleAddPhoneMember = async () => {
+    if (!newPhoneName.trim() || !newPhoneNumber.trim() || !workspaceId) return
+    setAddingPhone(true)
+    try {
+      const res = await fetch('/api/phone/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId, phone_number: newPhoneNumber.trim(), name: newPhoneName.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(`Código de activación enviado a ${newPhoneNumber}`)
+      setNewPhoneName('')
+      setNewPhoneNumber('')
+      setShowAddPhone(false)
+      fetchPhoneMembers()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Error al agregar el número')
+    } finally {
+      setAddingPhone(false)
+    }
+  }
+
+  const handleRemovePhoneMember = async (id: string) => {
+    if (!workspaceId) return
+    await fetch('/api/phone/members', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, workspace_id: workspaceId }),
+    })
+    setPhoneMembers(prev => prev.filter(m => m.id !== id))
+    toast.success('Número eliminado')
+  }
 
   useEffect(() => {
     if (!aiCfg.system_prompt_manual) {
@@ -472,6 +530,144 @@ function AssistantSettingsContent() {
               {activeTab === 'integrations' && !workspaceId && (
                 <div className="h-40 flex items-center justify-center">
                   <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {/* ── WHATSAPP ── */}
+              {activeTab === 'whatsapp' && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-950 tracking-tight mb-1">Nukor for WhatsApp</h2>
+                    <p className="text-sm text-gray-500">Permite que miembros de tu equipo consulten el asistente directamente desde WhatsApp.</p>
+                  </div>
+
+                  {/* How it works */}
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">¿Cómo funciona?</p>
+                    <ol className="space-y-2">
+                      {[
+                        'Agrega el número de un miembro de tu equipo.',
+                        'El sistema le enviará un código de activación por WhatsApp.',
+                        'Una vez que confirme el código, podrá consultar al asistente desde WhatsApp.',
+                        'El contexto de cada conversación se mantiene por 24 horas.',
+                      ].map((step, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-sm text-indigo-800">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  {/* Members list */}
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                      <p className="text-sm font-bold text-gray-950">Miembros registrados</p>
+                      <button
+                        onClick={() => setShowAddPhone(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        <Plus size={13} /> Agregar número
+                      </button>
+                    </div>
+
+                    {loadingPhoneMembers ? (
+                      <div className="py-10 flex justify-center">
+                        <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : phoneMembers.length === 0 ? (
+                      <div className="py-12 flex flex-col items-center gap-2 text-center">
+                        <Smartphone size={28} className="text-gray-300" />
+                        <p className="text-sm font-medium text-gray-400">Sin miembros registrados</p>
+                        <p className="text-xs text-gray-400">Agrega un número para empezar</p>
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {phoneMembers.map(m => (
+                          <li key={m.id} className="flex items-center gap-4 px-5 py-3.5">
+                            <div className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                              <Smartphone size={16} className="text-gray-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-950 truncate">{m.name}</p>
+                              <p className="text-xs text-gray-400 font-mono">{m.phone_number}</p>
+                            </div>
+                            {m.activated ? (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                <CheckCircle size={11} /> Activo
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                <Clock size={11} /> Pendiente
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleRemovePhoneMember(m.id)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Config note */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+                    <AlertTriangle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-700 mb-1">Requiere configuración del sistema</p>
+                      <p className="text-xs text-amber-600">Para activar WhatsApp necesitas configurar <code className="bg-amber-100 px-1 rounded">META_WHATSAPP_TOKEN</code>, <code className="bg-amber-100 px-1 rounded">META_PHONE_NUMBER_ID</code>, <code className="bg-amber-100 px-1 rounded">META_APP_SECRET</code> y <code className="bg-amber-100 px-1 rounded">META_WEBHOOK_VERIFY_TOKEN</code> en tus variables de entorno.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Add phone member modal */}
+              {showAddPhone && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+                      <h2 className="text-base font-semibold text-gray-950">Agregar número de WhatsApp</h2>
+                      <button onClick={() => setShowAddPhone(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre</label>
+                        <input
+                          type="text"
+                          value={newPhoneName}
+                          onChange={e => setNewPhoneName(e.target.value)}
+                          placeholder="Juan Pérez"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Número de teléfono</label>
+                        <input
+                          type="tel"
+                          value={newPhoneNumber}
+                          onChange={e => setNewPhoneNumber(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleAddPhoneMember()}
+                          placeholder="+5491112345678"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-mono"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Formato internacional con código de país</p>
+                      </div>
+                    </div>
+                    <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                      <button onClick={() => setShowAddPhone(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg">Cancelar</button>
+                      <button
+                        onClick={handleAddPhoneMember}
+                        disabled={addingPhone || !newPhoneName.trim() || !newPhoneNumber.trim()}
+                        className="px-5 py-2 text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm disabled:opacity-60"
+                      >
+                        {addingPhone ? 'Enviando código...' : 'Enviar código de activación'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
