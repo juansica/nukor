@@ -94,7 +94,7 @@ const Sidebar = ({
   const isChatActive = pathname === '/dashboard'
   const isLibraryActive = pathname.startsWith('/dashboard/library')
   const isOverviewActive = pathname.startsWith('/dashboard/overview')
-  const isAssistantActive = pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/workspace')
+  const isAssistantActive = pathname.startsWith('/dashboard/settings/assistant')
 
   return (
     <div className="flex flex-col h-full bg-white text-gray-950">
@@ -203,7 +203,7 @@ const Sidebar = ({
           Base de conocimiento
         </Link>
         <Link
-          href="/dashboard/settings?tab=ai"
+          href="/dashboard/settings/assistant"
           className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
             isAssistantActive
               ? 'bg-indigo-50 text-indigo-600'
