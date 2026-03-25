@@ -17,14 +17,19 @@ const INDUSTRIES = [
   'Educación', 'Construcción', 'Otro',
 ]
 
-const TABS = [
-  { id: 'general', label: 'General', icon: '⚙️' },
+const ASSISTANT_TABS = [
   { id: 'ai', label: 'Asistente IA', icon: '🤖' },
   { id: 'integrations', label: 'Integraciones', icon: '🔌' },
+]
+
+const WORKSPACE_TABS = [
+  { id: 'general', label: 'General', icon: '⚙️' },
   { id: 'members', label: 'Miembros', icon: '👥' },
   { id: 'plan', label: 'Plan', icon: '💳' },
   { id: 'developers', label: 'Desarrolladores', icon: '🔧' },
 ]
+
+const TABS = [...ASSISTANT_TABS, ...WORKSPACE_TABS]
 
 const TONES = [
   { id: 'profesional', label: 'Profesional', desc: 'Directo y claro' },
@@ -351,19 +356,37 @@ function SettingsContent() {
           <div className="p-5 pb-3">
             <h1 className="text-base font-bold text-gray-950 tracking-tight">Configuración</h1>
           </div>
-          <nav className="px-3 flex-1">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setTab(tab.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left mb-0.5 ${
-                  activeTab === tab.id ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
-                }`}
-              >
-                <span className="text-base leading-none">{tab.icon}</span>
-                {tab.label}
-              </button>
-            ))}
+          <nav className="px-3 flex-1 space-y-4">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1">Asistente</p>
+              {ASSISTANT_TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTab(tab.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left mb-0.5 ${
+                    activeTab === tab.id ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="text-base leading-none">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1">Workspace</p>
+              {WORKSPACE_TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTab(tab.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left mb-0.5 ${
+                    activeTab === tab.id ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="text-base leading-none">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </nav>
         </aside>
 
@@ -376,7 +399,7 @@ function SettingsContent() {
               <h1 className="text-xl font-bold text-gray-950 tracking-tight">Configuración</h1>
             </div>
             <div className="sm:hidden mb-6 overflow-x-auto flex gap-2 pb-1">
-              {TABS.map(tab => (
+              {[...ASSISTANT_TABS, ...WORKSPACE_TABS].map(tab => (
                 <button key={tab.id} onClick={() => setTab(tab.id)}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${activeTab === tab.id ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >

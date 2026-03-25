@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { IConversation } from '@/types/chat'
-import { Plus, BookOpen, MessageSquare, ChevronDown, X, Check, LayoutDashboard, History } from 'lucide-react'
+import { Plus, BookOpen, MessageSquare, ChevronDown, X, Check, LayoutDashboard, History, Bot } from 'lucide-react'
 
 interface SidebarProps {
   activeConversationId: string | null
@@ -94,6 +94,7 @@ const Sidebar = ({
   const isChatActive = pathname === '/dashboard'
   const isLibraryActive = pathname.startsWith('/dashboard/library')
   const isOverviewActive = pathname.startsWith('/dashboard/overview')
+  const isAssistantActive = pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/workspace')
 
   return (
     <div className="flex flex-col h-full bg-white text-gray-950">
@@ -201,6 +202,18 @@ const Sidebar = ({
           <BookOpen size={18} className={isLibraryActive ? 'text-indigo-600' : 'text-gray-400'} />
           Base de conocimiento
         </Link>
+        <Link
+          href="/dashboard/settings?tab=ai"
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border border-transparent ${
+            isAssistantActive
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-500 hover:bg-slate-50 hover:text-gray-900'
+          }`}
+          onClick={onClose}
+        >
+          <Bot size={18} className={isAssistantActive ? 'text-indigo-600' : 'text-gray-400'} />
+          Asistente
+        </Link>
       </nav>
 
 
@@ -232,14 +245,18 @@ const Sidebar = ({
             const lastWeek = new Date(today)
             lastWeek.setDate(lastWeek.getDate() - 7)
 
+            const sorted = [...conversations].sort((a, b) =>
+              new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+            )
+
             const grouped = {
-              'Hoy': conversations.filter(c => new Date(c.updated_at || c.created_at).toDateString() === today.toDateString()),
-              'Ayer': conversations.filter(c => new Date(c.updated_at || c.created_at).toDateString() === yesterday.toDateString()),
-              'Esta semana': conversations.filter(c => {
+              'Hoy': sorted.filter(c => new Date(c.updated_at || c.created_at).toDateString() === today.toDateString()),
+              'Ayer': sorted.filter(c => new Date(c.updated_at || c.created_at).toDateString() === yesterday.toDateString()),
+              'Esta semana': sorted.filter(c => {
                 const d = new Date(c.updated_at || c.created_at)
                 return d > lastWeek && d.toDateString() !== today.toDateString() && d.toDateString() !== yesterday.toDateString()
               }),
-              'Anteriores': conversations.filter(c => new Date(c.updated_at || c.created_at) <= lastWeek)
+              'Anteriores': sorted.filter(c => new Date(c.updated_at || c.created_at) <= lastWeek)
             }
 
             return Object.entries(grouped).map(([label, convs]) => (
